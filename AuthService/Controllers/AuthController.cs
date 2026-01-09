@@ -2,7 +2,9 @@
 using AuthService.DTOs;
 using AuthService.Entities;
 using AuthService.Helpers;
+using AuthService.Interfaces;
 using AuthService.Services;
+
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,10 +16,10 @@ namespace AuthService.Controllers
     {
         private readonly AuthDbContext _context;
         private readonly TokenService _tokenService;
-        private readonly EmailService _emailService;
+        private readonly IEmailService _emailService;
         private readonly IConfiguration _configuration;
 
-        public AuthController(AuthDbContext context, TokenService tokenService, EmailService emailService, IConfiguration configuration)
+        public AuthController(AuthDbContext context, TokenService tokenService, IEmailService emailService, IConfiguration configuration)
         {
             _context = context;
             _tokenService = tokenService;
@@ -42,6 +44,8 @@ namespace AuthService.Controllers
                 PasswordHash = passwordHash,
                 PasswordSalt = passwordSalt,
                 IsEmailVerified = false,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
             };
             _context.Users.Add(user);
 
@@ -57,16 +61,15 @@ namespace AuthService.Controllers
                 UserId = user.Id,
                 Token = Guid.NewGuid().ToString(),
                 TokenType = "EmailVerification",
-                ExpiresAt = DateTime.UtcNow.AddHours(24)
+                ExpiresAt = DateTime.UtcNow.AddHours(24),
+                IsUsed = false
             };
             _context.UserTokens.Add(token);
 
             await _context.SaveChangesAsync();
 
-            // Here, you would typically send the verification email containing the token.Token to the user's email address.
             var verificationLink = $"{_configuration["Frontend:BaseUrl"]}/verify-email?token={token.Token}";
-
-            await _emailService.SendAsync(dto.Email, "Verify Your Email", "$Click here to verify:{verificationLink}");
+            await _emailService.SendAsync(dto.Email, "Verify Your Email", $"Click here to verify: {verificationLink}");
 
             return Ok("User registered successfully.");
         }
@@ -88,9 +91,9 @@ namespace AuthService.Controllers
                 return Unauthorized("Please verify your email first");
 
 
-            var roles = user.UserRoles.Select(r => r.Role.Name).ToList();
+            var roles = user.UserRoles.Select(r => r.Role!.Name).ToList();
             var token = _tokenService.CreateToken(user, roles);
-            return Ok(new {token});
+            return Ok(new { token });
         }
 
 
@@ -133,14 +136,15 @@ namespace AuthService.Controllers
                 UserId = user.Id,
                 Token = Guid.NewGuid().ToString(),
                 TokenType = "PasswordReset",
-                ExpiresAt = DateTime.UtcNow.AddMinutes(30)
+                ExpiresAt = DateTime.UtcNow.AddMinutes(30),
+                IsUsed = false
             };
 
             _context.UserTokens.Add(token);
             await _context.SaveChangesAsync();
 
-            var verificationLink = $"{_configuration["Frontend:BaseUrl"]}/verify-email?token={token.Token}";
-            await _emailService.SendAsync(dto.Email, "Reset Your Password", verificationLink);
+            var resetLink = $"{_configuration["Frontend:BaseUrl"]}/reset-password?token={token.Token}";
+            await _emailService.SendAsync(dto.Email, "Reset Your Password", $"Reset your password by clicking: {resetLink}");
 
             return Ok("Password reset link sent");
         }

@@ -1,6 +1,8 @@
 ﻿using AuthService.Interfaces;
+using System;
 using System.Net;
 using System.Net.Mail;
+using System.Threading.Tasks;
 
 namespace AuthService.Services
 {
@@ -14,25 +16,38 @@ namespace AuthService.Services
 
         public async Task SendAsync(string to, string subject, string body)
         {
-            var smtpHost = _configuration["EmailSettings:SmtpHost"];
-            var smtpPort = int.Parse(_configuration["EmailSettings:SmtpPort"]);
-            var smtpUser = _configuration["EmailSettings:SmtpUser"];
-            var smtpPass = _configuration["EmailSettings:SmtpPass"];
-            var fromAddress = _configuration["EmailSettings:FromAddress"];
-            using (var client = new SmtpClient(smtpHost, smtpPort))
+            // Support both EmailSettings and legacy Email sections if needed
+            var smtpHost = _configuration["EmailSettings:SmtpHost"] ?? _configuration["Email:SmtpHost"];
+            var smtpPortRaw = _configuration["EmailSettings:SmtpPort"] ?? _configuration["Email:Port"];
+            var smtpUser = _configuration["EmailSettings:SmtpUser"] ?? _configuration["Email:Username"];
+            var smtpPass = _configuration["EmailSettings:SmtpPass"] ?? _configuration["Email:Password"];
+            var fromAddress = _configuration["EmailSettings:FromAddress"] ?? _configuration["Email:From"];
+
+            if (string.IsNullOrWhiteSpace(smtpHost))
+                throw new InvalidOperationException("SMTP host is not configured (EmailSettings:SmtpHost).");
+            if (!int.TryParse(smtpPortRaw, out var smtpPort))
+                throw new InvalidOperationException("SMTP port is not configured or invalid (EmailSettings:SmtpPort).");
+            if (string.IsNullOrWhiteSpace(smtpUser) || string.IsNullOrWhiteSpace(smtpPass))
+                throw new InvalidOperationException("SMTP credentials are missing (EmailSettings:SmtpUser / EmailSettings:SmtpPass).");
+
+            using var client = new SmtpClient(smtpHost, smtpPort)
             {
-                client.Credentials = new NetworkCredential(smtpUser, smtpPass);
-                client.EnableSsl = true;
-                var mailMessage = new MailMessage
-                {
-                    From = new MailAddress(fromAddress),
-                    Subject = subject,
-                    Body = body,
-                    IsBodyHtml = true,
-                };
-                mailMessage.To.Add(to);
-                await client.SendMailAsync(mailMessage);
-            }
+                EnableSsl = true,
+                DeliveryMethod = SmtpDeliveryMethod.Network,
+                UseDefaultCredentials = false,
+                Credentials = new NetworkCredential(smtpUser, smtpPass)
+            };
+
+            var mailMessage = new MailMessage
+            {
+                From = new MailAddress(fromAddress ?? smtpUser),
+                Subject = subject,
+                Body = body,
+                IsBodyHtml = true
+            };
+            mailMessage.To.Add(to);
+
+            await client.SendMailAsync(mailMessage).ConfigureAwait(false);
         }
     }
 }

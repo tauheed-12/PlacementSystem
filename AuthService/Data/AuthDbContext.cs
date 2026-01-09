@@ -33,18 +33,16 @@ namespace AuthService.Data
                 .WithMany(r => r.UserRoles)
                 .HasForeignKey(ur => ur.RoleId);
 
-            // Although not strictly necessary, but it is good practice to define relationships for RefreshToken as it avoids orphans 
-            // refresh tokens when a user is deleted. This is done using Cascade Delete Behavior.
+            // Use navigation expressions to avoid shadow FK creation
             modelBuilder.Entity<RefreshToken>()
-                .HasOne<User>()
-                .WithMany()
+                .HasOne(rt => rt.User)
+                .WithMany(u => u.RefreshTokens)
                 .HasForeignKey(rt => rt.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Similarly, if you have a UserToken entity, you can define its relationship as well.
             modelBuilder.Entity<UserToken>()
-                .HasOne<User>()
-                .WithMany()
+                .HasOne(ut => ut.User)
+                .WithMany(u => u.UserTokens)
                 .HasForeignKey(ut => ut.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
@@ -56,6 +54,5 @@ namespace AuthService.Data
                 new Role { Id = 5, Name = "Admin" }
             );
         }
-
     }
 }
