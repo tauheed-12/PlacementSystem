@@ -1,7 +1,9 @@
 ﻿using AuthService.Entities;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Runtime.Intrinsics.Arm;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace AuthService.Services
@@ -25,9 +27,11 @@ namespace AuthService.Services
 
             var claims = new List<Claim>
             {
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),  
                 new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email)
             };
+
 
             claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(keyString));
@@ -37,11 +41,25 @@ namespace AuthService.Services
                 issuer: _config["Jwt:Issuer"],
                 audience: _config["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(15),
+                expires: DateTime.UtcNow.AddMinutes(30),
                 signingCredentials: creds
             );
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
+
+        public string GenerateRefreshToken()
+        {
+            return Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        }
+
+        public static string HashToken(string token)
+        {
+            using var sha256 = SHA256.Create();
+            return Convert.ToBase64String(
+                sha256.ComputeHash(Encoding.UTF8.GetBytes(token))
+            );
+        }
+
     }
 }

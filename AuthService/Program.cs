@@ -1,3 +1,4 @@
+using System;
 using AuthService.Data;
 using AuthService.Interfaces;
 using AuthService.Services;
@@ -6,26 +7,67 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using AuthService.Repositories.Interfaces;
+using AuthService.Repositories;
+using AuthService.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Configuration
+    .AddJsonFile("appsettings.json", optional: false)
+    .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
+    .AddEnvironmentVariables();
 
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Register application services and infrastructure BEFORE building the app
-Console.WriteLine(builder.Configuration.GetConnectionString("AuthDb"));
+// DATABASE CONFIGURATION
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseSqlServer(
-    "Server=host.docker.internal,1433;" +
-    "Database=AuthDb;" +
-    "User Id=docker_user;" +
-    "Password=Strong@123;" +
-    "TrustServerCertificate=True;"
-));
+        builder.Configuration.GetConnectionString("AuthDb"),
+        sqlServerOptions =>
+        {
+            sqlServerOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null
+            );
+        })
+);
 
 builder.Services.AddScoped<TokenService>(); // Register TokenService for dependency injection
+//builder.Services.AddScoped<IEmailService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IAuthService, AuthService.Services.AuthService>();
+
+// ---- Validate JWT key and configure authentication ----
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    throw new InvalidOperationException("Configuration error: 'Jwt:Key' is missing. Provide a signing key via configuration or environment variable.");
+}
+var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
+if (keyBytes.Length < 16) // 16 bytes = 128 bits minimum for HS256
+{
+    throw new InvalidOperationException($"Configuration error: 'Jwt:Key' is too short ({keyBytes.Length * 8} bits). Provide at least 128 bits (16 bytes), recommended 256 bits.");
+}
+
+// Add CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend",
+        policy =>
+        {
+            policy
+                .WithOrigins("http://localhost:5173") // frontend URL
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials(); // if using cookies / auth
+        });
+});
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -55,7 +97,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseCors("AllowFrontend");
 // Authentication must run before Authorization
 app.UseAuthentication();
 app.UseAuthorization();
