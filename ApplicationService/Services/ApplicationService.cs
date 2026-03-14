@@ -1,9 +1,9 @@
-﻿using ApplicationService.Data.Interfaces;
+using ApplicationService.Data.Interfaces;
 using ApplicationService.Repositories.Interfaces;
 using ApplicationService.Services.Interfaces;
 using ApplicationService.Entities;
 using ApplicationService.DTO;
-using ApplicationService.HttpClients;
+using ApplicationService.HttpClients.Interfaces;
 using ApplicationService.Exceptions;
 
 namespace ApplicationService.Services
@@ -12,10 +12,10 @@ namespace ApplicationService.Services
     {
         private readonly IApplicationRepository _repository;
         private readonly IUnitOfWork _unitOfWork;
-        private readonly PlacementDriveServiceClient _placementDriveServiceClient;
+        private readonly IPlacementDriveServiceClient _placementDriveServiceClient;
 
         public ApplicationService(IUnitOfWork unitOfWork, IApplicationRepository repository, 
-            PlacementDriveServiceClient placementDriveServiceClient)
+            IPlacementDriveServiceClient placementDriveServiceClient)
         {
             _unitOfWork = unitOfWork;
             _repository = repository;
@@ -28,18 +28,33 @@ namespace ApplicationService.Services
             {
                 throw new ArgumentNullException(nameof(request));
             }
+            if (request.DriveId == Guid.Empty || request.StudentId == Guid.Empty)
+            {
+                throw new ArgumentException("DriveId and StudentId are required.");
+            }
+
+            var existing = await _repository.GetByStudentIdAsync(request.StudentId, cancellationToken);
+            if (existing.Any(a => a.DriveId == request.DriveId))
+            {
+                throw new InvalidOperationException("You have already applied to this drive.");
+            }
+
             var application = Application.Create(request.StudentId, request.DriveId);
 
             await _repository.AddAsync(application, cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task DeleteApplication(Guid applicationId, CancellationToken cancellationToken)
+        public async Task DeleteApplication(Guid applicationId, Guid studentId, CancellationToken cancellationToken)
         {
             var application = await _repository.GetByApplicationIdAsync(applicationId, cancellationToken);
             if (application == null)
             {
                 throw new NotFoundException("Application not found");
+            }
+            if (application.StudentUserId != studentId)
+            {
+                throw new UnauthorizedAccessException("You can only withdraw your own applications.");
             }
             _repository.Remove(application);
             await _unitOfWork.SaveChangesAsync(cancellationToken);

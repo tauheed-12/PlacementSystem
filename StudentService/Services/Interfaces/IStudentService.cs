@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using StudentService.DTOs;
+using StudentService.Entities;
 
 namespace StudentService.Services.Interfaces
 {
@@ -11,6 +12,8 @@ namespace StudentService.Services.Interfaces
         Task DeleteProfileAsync(Guid studentId);
         Task<List<StudentProfileResponseDto>> GetAllProfilesAsync();
         Task<List<StudentProfileResponseDto>> GetProfilesInBulkAsync(List<Guid> userIds);
-
+        Task<decimal> GetProfileProgressAsync(Guid userId);
+        Task<ProfileCompletionDto> GetProfileCompletionStatus(Guid userId);
+        Task UpdateSkills(List<StudentSkill> skills);
     }
 }

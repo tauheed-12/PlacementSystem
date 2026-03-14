@@ -41,7 +41,7 @@ namespace AuthService.Services
                 issuer: _config["Jwt:Issuer"],
                 audience: _config["Jwt:Audience"],
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(30),
+                expires: DateTime.UtcNow.AddMinutes(120),
                 signingCredentials: creds
             );
 

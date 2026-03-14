@@ -11,18 +11,33 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+// ----------------------------------------------------
+// Configuration
+// ----------------------------------------------------
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false)
     .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
 
+// ----------------------------------------------------
+// Logging
+// ----------------------------------------------------
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
+
+// ----------------------------------------------------
+// Database Configuration
+// ----------------------------------------------------
 builder.Services.AddDbContext<PlacementDriveDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("PlacementDriveDb"),
-        sqlServerOptions =>
+        sqlOptions =>
         {
-            sqlServerOptions.EnableRetryOnFailure(
+            sqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(10),
                 errorNumbersToAdd: null
@@ -30,9 +45,30 @@ builder.Services.AddDbContext<PlacementDriveDbContext>(options =>
         })
 );
 
-// JWT AUTHENTICATION
-// This service ONLY VALIDATES tokens (AuthService ISSUES them)
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+
+// ----------------------------------------------------
+// JWT Authentication
+// ----------------------------------------------------
+var jwtKey = builder.Configuration["Jwt:Key"];
+
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    throw new InvalidOperationException(
+        "Configuration error: 'Jwt:Key' is missing."
+    );
+}
+
+var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
+
+if (keyBytes.Length < 16)
+{
+    throw new InvalidOperationException(
+        "Configuration error: 'Jwt:Key' is too short. Provide at least 128 bits."
+    );
+}
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -45,52 +81,74 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
 
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])
-            ),
+            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
 
-            // Map JWT claims correctly
             NameClaimType = JwtRegisteredClaimNames.Sub,
             RoleClaimType = ClaimTypes.Role
         };
     });
-// Add services to the container.
+
 builder.Services.AddAuthorization();
+
+
+// ----------------------------------------------------
+// Controllers
+// ----------------------------------------------------
 builder.Services.AddControllers();
-builder.Services.AddScoped<PlacementDriveDbContext>();
+
+
+// ----------------------------------------------------
+// Application Services
+// ----------------------------------------------------
 builder.Services.AddSingleton<IKafkaClient, KafkaClient>();
-builder.Services.AddScoped<IPlacementDriveService, PlacementDriveService.Services.PlacementDriveService>();
-builder.Services.AddScoped<PlacementDriveService.Repositries.Interfaces.IPlacementDriveRepository, PlacementDriveService.Repositries.PlacementDriveRepository>();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-// SWAGGER + JWT SUPPORT
+
+builder.Services.AddScoped<IPlacementDriveService,
+    PlacementDriveService.Services.PlacementDriveService>();
+
+builder.Services.AddScoped<
+    PlacementDriveService.Repositries.Interfaces.IPlacementDriveRepository,
+    PlacementDriveService.Repositries.PlacementDriveRepository>();
+
+
+// ----------------------------------------------------
+// Health Checks
+// ----------------------------------------------------
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<PlacementDriveDbContext>("database");
+
+
+// ----------------------------------------------------
+// Swagger + JWT Authorization
+// ----------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
+
+builder.Services.AddSwaggerGen(options =>
 {
-    c.SwaggerDoc("v1", new OpenApiInfo
+    options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "PlacementDerive API",
+        Title = "PlacementDrive API",
         Version = "v1"
     });
 
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
         Type = SecuritySchemeType.Http,
         Scheme = "Bearer",
         BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Enter JWT token as: Bearer {your token}"
+        Description = "Enter token as: Bearer {your token}"
     });
 
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
             new OpenApiSecurityScheme
             {
                 Reference = new OpenApiReference
                 {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
+                    Id = "Bearer",
+                    Type = ReferenceType.SecurityScheme
                 }
             },
             Array.Empty<string>()
@@ -99,20 +157,27 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 
+// ----------------------------------------------------
+// Build Application
+// ----------------------------------------------------
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+
+// ----------------------------------------------------
+// Middleware Pipeline
+// ----------------------------------------------------
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+app.UseMiddleware<PlacementDriveService.Middleware.GlobalExceptionMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHealthChecks("/health");
 
 app.Run();

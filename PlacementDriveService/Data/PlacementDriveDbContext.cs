@@ -1,4 +1,6 @@
-﻿using System.Linq;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
@@ -18,10 +20,6 @@ namespace PlacementDriveService.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<Entities.PlacementApplication>()
-                .HasIndex(a => new { a.PlacementDriveId, a.StudentUserId })
-                .IsUnique();
-
             // Store List<string> AllowedBranches as JSON in a single column
             modelBuilder.Entity<Entities.PlacementDrive>(b =>
             {
@@ -38,6 +36,15 @@ namespace PlacementDriveService.Data
 
                 // Optional: set a column type/length if desired, e.g. nvarchar(max)
                 b.Property(p => p.AllowedBranches).HasColumnType("nvarchar(max)");
+            });
+
+            modelBuilder.Entity<Entities.PlacementApplication>(b =>
+            {
+                b.HasOne(a => a.PlacementDrive)
+                    .WithMany()
+                    .HasForeignKey(a => a.PlacementDriveId)
+                    .OnDelete(DeleteBehavior.Cascade);
+                b.HasIndex(a => new { a.PlacementDriveId, a.StudentUserId }).IsUnique();
             });
         }
     }

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PlacementDriveService.Constants;
 using PlacementDriveService.Data;
 using PlacementDriveService.Entities;
@@ -53,6 +53,11 @@ namespace PlacementDriveService.Repositries
         public async Task AddApplicationAsync(PlacementApplication application)
         {
             await _db.PlacementApplications.AddAsync(application);
+        }
+
+        public void RemoveApplication(PlacementApplication application)
+        {
+            _db.PlacementApplications.Remove(application);
         }
 
         public async Task<PlacementApplication?> GetApplication(Guid driveId, Guid studentId)

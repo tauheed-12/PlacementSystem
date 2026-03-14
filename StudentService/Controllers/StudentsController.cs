@@ -1,17 +1,14 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using StudentService.Constants;
-using StudentService.Data;
 using StudentService.DTOs;
-using StudentService.Entities;
-using StudentService.Helpers;
 using StudentService.Services.Interfaces;
+using System.Security.Claims;
 
 namespace StudentService.Controllers
 {
     [ApiController]
-    [Route("api/students")]
+    [Route("api/student")]
     [Authorize]
     public class StudentsController : ControllerBase
     {
@@ -26,7 +23,8 @@ namespace StudentService.Controllers
         [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Create(CreateStudentProfileDto dto)
         {
-            await _service.CreateProfileAsync(User.GetUserId(), dto);
+            Guid userId = GetUserIdFromToken();
+            await _service.CreateProfileAsync(userId, dto);
             return Created("", null);
         }
 
@@ -34,20 +32,27 @@ namespace StudentService.Controllers
         [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Get()
         {
-            return Ok(await _service.GetProfileAsync(User.GetUserId()));
+            var userId = GetUserIdFromToken();
+            return Ok(await _service.GetProfileAsync(userId));
         }
 
         [HttpPatch("update-profile")]
         [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Update(UpdateStudentProfileDto dto)
         {
-            await _service.UpdateProfileAsync(User.GetUserId(), dto);
+            var userId = GetUserIdFromToken();
+            await _service.UpdateProfileAsync(userId, dto);
             return NoContent();
         }
 
         [HttpPost("bulk-profiles")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.TPO},{Roles.PlacementCoordinator},{Roles.Recruiter}")]
         public async Task<IActionResult> Bulk(BulkStudentProfileRequestDto dto)
         {
+            if (dto?.UserIds == null || dto.UserIds.Count == 0)
+                return Ok(new List<object>());
+            if (dto.UserIds.Count > 100)
+                return BadRequest("Maximum 100 user IDs per request.");
             return Ok(await _service.GetProfilesInBulkAsync(dto.UserIds));
         }
 
@@ -64,6 +69,16 @@ namespace StudentService.Controllers
         {
             await _service.DeleteProfileAsync(id);
             return NoContent();
+        }
+
+        private Guid GetUserIdFromToken()
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+
+            if (userIdClaim == null)
+                throw new UnauthorizedAccessException("User ID not found in token");
+
+            return Guid.Parse(userIdClaim.Value);
         }
     }
 }

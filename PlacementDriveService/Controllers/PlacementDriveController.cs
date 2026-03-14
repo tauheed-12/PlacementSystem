@@ -1,11 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using PlacementDriveService.Constants;
-using PlacementDriveService.Data;
 using PlacementDriveService.DTOs;
 using PlacementDriveService.Services.Interfaces;
-using System.Security.Claims;
+using PlacementDriveService.NewFolder;
 
 namespace PlacementDriveService.Controllers
 {
@@ -25,11 +23,13 @@ namespace PlacementDriveService.Controllers
         [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator}")]
         public async Task<IActionResult> Create(PlacementDriveCreateDto dto)
         {
-            var id = await _service.CreateDriveAsync(dto);
+            Guid userId = User.GetUserId();
+            var id = await _service.CreateDriveAsync(dto, userId);
             return CreatedAtAction(nameof(GetById), new { id }, null);
         }
 
         [HttpPut("{id}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator}")]
         public async Task<IActionResult> Update(Guid id, PlacementDriveUpdateDto dto)
         {
             await _service.UpdateDriveAsync(id, dto);
@@ -37,6 +37,7 @@ namespace PlacementDriveService.Controllers
         }
 
         [HttpDelete("{id}")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator}")]
         public async Task<IActionResult> Delete(Guid id)
         {
             await _service.DeleteDriveAsync(id);
@@ -47,6 +48,8 @@ namespace PlacementDriveService.Controllers
         [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Get(int page = 1, int pageSize = 10)
         {
+            if (page < 1) page = 1;
+            if (pageSize < 1 || pageSize > 100) pageSize = 10;
             return Ok(await _service.GetOpenDrivesAsync(page, pageSize));
         }
 
@@ -57,20 +60,29 @@ namespace PlacementDriveService.Controllers
             return Ok(await _service.GetDriveByIdAsync(id));
         }
 
+        [HttpPost("bulk")]
+        [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator},{Roles.Student}")]
+        public async Task<IActionResult> Bulk([FromBody] List<Guid> driveIds)
+        {
+            if (driveIds == null || driveIds.Count == 0)
+                return Ok(new List<PlacementDriveResponseDto>());
+            return Ok(await _service.GetDrivesBulkAsync(driveIds));
+        }
+
         [HttpPost("{id}/apply")]
         [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Apply(Guid id)
         {
-            var studentId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var studentId = User.GetUserId();
             await _service.ApplyAsync(id, studentId);
-            return Created("", null);
+            return CreatedAtAction(nameof(GetById), new { id }, null);
         }
 
         [HttpDelete("{id}/apply")]
         [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Withdraw(Guid id)
         {
-            var studentId = Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var studentId = User.GetUserId();
             await _service.WithdrawAsync(id, studentId);
             return NoContent();
         }

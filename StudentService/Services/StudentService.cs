@@ -43,7 +43,7 @@ namespace StudentService.Services
                     SkillName = skill
                 }).ToList()
             };
-
+            student.ProfileProgress = ProfileProgressCalculator.Calculate(student);
             await _repo.AddAsync(student);
             await _repo.SaveChangesAsync();
         }
@@ -80,7 +80,7 @@ namespace StudentService.Services
                     });
                 }
             }
-
+            student.ProfileProgress = ProfileProgressCalculator.Calculate(student);
             await _repo.SaveChangesAsync();
         }
 
@@ -103,6 +103,39 @@ namespace StudentService.Services
             return (await _repo.GetByUserIdsAsync(userIds))
                 .Select(Map)
                 .ToList();
+        }
+
+        public async Task<Decimal> GetProfileProgressAsync(Guid userId)
+        {
+            var student = await _repo.GetByUserIdAsync(userId)
+                ?? throw new KeyNotFoundException("Profile not found");
+
+            return student.ProfileProgress;
+        }
+
+        public async Task<ProfileCompletionDto> GetProfileCompletionStatus(Guid userId)
+        {
+            var student = await _repo.GetByUserIdAsync(userId)
+                ?? throw new KeyNotFoundException("Profile not found");
+
+            return new ProfileCompletionDto
+            {
+                AcademicInfoCompleted =
+                    !string.IsNullOrEmpty(student.RollNo) &&
+                    !string.IsNullOrEmpty(student.EnrollmentNo) &&
+                    !string.IsNullOrEmpty(student.Course) &&
+                    !string.IsNullOrEmpty(student.Branch),
+
+                SkillsCompleted = student.Skills.Any(),
+
+                ContactCompleted =
+                    !string.IsNullOrEmpty(student.Email) &&
+                    !string.IsNullOrEmpty(student.PhoneNumber),
+
+                ResumeUploaded = student.Documents.Any(d => d.DocumentType == "Resume"),
+
+                Progress = student.ProfileProgress
+            };
         }
 
         private static StudentProfileResponseDto Map(Student student)

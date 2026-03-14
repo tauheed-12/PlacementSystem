@@ -16,7 +16,5 @@ namespace PlacementDriveService.Entities
         public Guid CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string Status { get; set; } = DriveStatus.Scheduled;
-        public ICollection<PlacementApplication> Applications { get; set; } = new List<PlacementApplication>();
-
     }
 }

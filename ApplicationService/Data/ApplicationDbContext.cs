@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 
 namespace ApplicationService.Data
 {
@@ -7,7 +7,7 @@ namespace ApplicationService.Data
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options): base(options) { }
         public DbSet<Entities.Application> Applications { get; set; } = null!;
 
-        protected void onModelCreating(ModelBuilder modelBuilder)
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
         }

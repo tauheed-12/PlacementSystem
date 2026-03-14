@@ -1,4 +1,4 @@
-﻿using AuthService.Data;
+using AuthService.Data;
 using AuthService.DTOs;
 using AuthService.Entities;
 using AuthService.Enums;
@@ -74,8 +74,12 @@ namespace AuthService.Controllers
         public async Task<IActionResult> Refresh()
         {
             var refreshToken = Request.Cookies["refreshToken"];
-            var token = await _service.RefreshTokenAsync(refreshToken!);
-            return Ok(new { token });
+            if (string.IsNullOrEmpty(refreshToken))
+            {
+                return Unauthorized(new { message = "Refresh token is required." });
+            }
+            var token = await _service.RefreshTokenAsync(refreshToken);
+            return Ok(new { accessToken = token });
         }
 
         [HttpPost("logout")]

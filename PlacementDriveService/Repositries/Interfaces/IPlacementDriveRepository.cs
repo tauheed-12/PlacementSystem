@@ -1,4 +1,4 @@
-﻿using PlacementDriveService.Entities;
+using PlacementDriveService.Entities;
 
 namespace PlacementDriveService.Repositries.Interfaces
 {
@@ -11,6 +11,7 @@ namespace PlacementDriveService.Repositries.Interfaces
         IQueryable<PlacementDrive> GetOpenDrives();
         Task<bool> HasStudentApplied(Guid driveId, Guid studentId);
         Task AddApplicationAsync(PlacementApplication application);
+        void RemoveApplication(PlacementApplication application);
         Task<PlacementApplication?> GetApplication(Guid driveId, Guid studentId);
         IQueryable<PlacementApplication> GetStudentApplications(Guid studentId);
     }
