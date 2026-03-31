@@ -80,13 +80,30 @@ namespace ApplicationService.Services
                     return new UserApplicationsResponseDto
                     {
                         ApplicationId = a.Id,
-                        CompanyName = drive.CompanyName,
+                        CompanyName = drive.CompanyName, 
                         Status = a.Status.ToString(),
                         DriveDate = drive.DriveDate,
                         AppliedAt = a.AppliedAt
                     };
                 })
                 .ToList();
+        }
+
+        public async Task<List<StudentApplicationDto>> GetStudentApplication(Guid studentId, CancellationToken cancellationToken)
+        {
+            var application = await _repository.GetByStudentIdAsync(studentId, cancellationToken);
+            if (application == null || application.Count() == 0)
+            {
+                throw new NotFoundException("No applications found for the student.");
+            }
+            List<StudentApplicationDto> applicationDtos = application.Select(a => new StudentApplicationDto
+            {
+                Id = a.Id,
+                DriveId = a.DriveId,
+                AppliedOn = a.AppliedAt,
+                Status = a.Status.ToString()
+            }).ToList();
+            return applicationDtos;
         }
 
         // TODO: Update below api logic

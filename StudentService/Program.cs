@@ -1,18 +1,14 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using StudentService.Data;
 using StudentService.Repositories;
 using StudentService.Repositories.Interfaces;
-using StudentService.Services;
+using StudentService.Middleware;
 using StudentService.Services.Interfaces;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+using StudentService.Services;
+using StudentService.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
-
 
 // ----------------------------------------------------
 // Configuration
@@ -21,7 +17,6 @@ builder.Configuration
     .AddJsonFile("appsettings.json", optional: false)
     .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
-
 
 // ----------------------------------------------------
 // Database Configuration
@@ -39,64 +34,25 @@ builder.Services.AddDbContext<StudentDbContext>(options =>
         })
 );
 
-
-// ----------------------------------------------------
-// JWT Authentication
-// ----------------------------------------------------
-var jwtKey = builder.Configuration["Jwt:Key"];
-
-if (string.IsNullOrWhiteSpace(jwtKey))
-{
-    throw new InvalidOperationException(
-        "Configuration error: 'Jwt:Key' is missing."
-    );
-}
-
-var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
-
-if (keyBytes.Length < 16)
-{
-    throw new InvalidOperationException(
-        "Configuration error: 'Jwt:Key' is too short. Provide at least 128 bits."
-    );
-}
-
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-
-            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
-
-            NameClaimType = JwtRegisteredClaimNames.Sub,
-            RoleClaimType = ClaimTypes.Role
-        };
-    });
-
-builder.Services.AddAuthorization();
-
-
 // ----------------------------------------------------
 // Controllers
 // ----------------------------------------------------
 builder.Services.AddControllers();
 
+// ----------------------------------------------------
+// HTTP Context Accessor
+// Needed to read X-User-Id and X-User-Role headers
+// forwarded by the API Gateway
+// ----------------------------------------------------
+builder.Services.AddHttpContextAccessor();
 
 // ----------------------------------------------------
-// Application Services
+// Application Services & Repositories
 // ----------------------------------------------------
 builder.Services.AddScoped<IStudentRepository, StudentRepository>();
 builder.Services.AddScoped<IStudentService, StudentService.Services.StudentService>();
-
+builder.Services.AddScoped<ISkillService, SkillService>();
+builder.Services.AddScoped<RequestContextAccessor>();
 
 // ----------------------------------------------------
 // Health Checks
@@ -104,9 +60,8 @@ builder.Services.AddScoped<IStudentService, StudentService.Services.StudentServi
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<StudentDbContext>("database");
 
-
 // ----------------------------------------------------
-// Swagger + JWT Authorization
+// Swagger
 // ----------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 
@@ -118,14 +73,13 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1"
     });
 
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    // Simulates gateway header forwarding during local dev testing
+    options.AddSecurityDefinition("GatewayHeaders", new OpenApiSecurityScheme
     {
-        Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        Scheme = "Bearer",
-        BearerFormat = "JWT",
+        Name = "X-User-Id",
+        Type = SecuritySchemeType.ApiKey,
         In = ParameterLocation.Header,
-        Description = "Enter token as: Bearer {your token}"
+        Description = "Paste a user GUID to simulate gateway forwarding"
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -135,7 +89,7 @@ builder.Services.AddSwaggerGen(options =>
             {
                 Reference = new OpenApiReference
                 {
-                    Id = "Bearer",
+                    Id = "GatewayHeaders",
                     Type = ReferenceType.SecurityScheme
                 }
             },
@@ -144,12 +98,10 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-
 // ----------------------------------------------------
 // Build Application
 // ----------------------------------------------------
 var app = builder.Build();
-
 
 // ----------------------------------------------------
 // Middleware Pipeline
@@ -161,11 +113,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-app.UseMiddleware<StudentService.Middleware.GlobalExceptionMiddleware>();
-
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseGlobalExceptionMiddleware();
 
 app.MapControllers();
 app.MapHealthChecks("/health");

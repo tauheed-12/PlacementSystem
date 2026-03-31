@@ -8,8 +8,10 @@ namespace NotificationsService.Events
 
         public NotificationEventType EventType { get; set; }
 
-        public Guid UserId { get; set; }
+        public AudienceType AudienceType { get; set; }
 
-        public Dictionary<string, string> Data { get; set; } = new();
+        public List<Guid>? TargetUserIds { get; set; } // Only populated if AudienceType is Targeted
+
+        public Dictionary<string, string>? Data { get; set; }
     }
 }

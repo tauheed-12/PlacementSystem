@@ -42,37 +42,6 @@ namespace PlacementDriveService.Repositries
                 .Where(d => d.Status == DriveStatus.Scheduled &&
                             d.ApplicationDeadline >= DateTime.UtcNow);
         }
-
-        public async Task<bool> HasStudentApplied(Guid driveId, Guid studentId)
-        {
-            return await _db.PlacementApplications
-                .AnyAsync(a => a.PlacementDriveId == driveId &&
-                               a.StudentUserId == studentId);
-        }
-
-        public async Task AddApplicationAsync(PlacementApplication application)
-        {
-            await _db.PlacementApplications.AddAsync(application);
-        }
-
-        public void RemoveApplication(PlacementApplication application)
-        {
-            _db.PlacementApplications.Remove(application);
-        }
-
-        public async Task<PlacementApplication?> GetApplication(Guid driveId, Guid studentId)
-        {
-            return await _db.PlacementApplications
-                .FirstOrDefaultAsync(a => a.PlacementDriveId == driveId &&
-                                          a.StudentUserId == studentId);
-        }
-
-        public IQueryable<PlacementApplication> GetStudentApplications(Guid studentId)
-        {
-            return _db.PlacementApplications
-                .Include(a => a.PlacementDrive)
-                .Where(a => a.StudentUserId == studentId);
-        }
     }
 
 }

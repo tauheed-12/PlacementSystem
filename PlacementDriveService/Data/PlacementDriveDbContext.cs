@@ -14,7 +14,6 @@ namespace PlacementDriveService.Data
         }
 
         public DbSet<Entities.PlacementDrive> PlacementDrives { get; set; } = null!;
-        public DbSet<Entities.PlacementApplication> PlacementApplications { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -36,15 +35,6 @@ namespace PlacementDriveService.Data
 
                 // Optional: set a column type/length if desired, e.g. nvarchar(max)
                 b.Property(p => p.AllowedBranches).HasColumnType("nvarchar(max)");
-            });
-
-            modelBuilder.Entity<Entities.PlacementApplication>(b =>
-            {
-                b.HasOne(a => a.PlacementDrive)
-                    .WithMany()
-                    .HasForeignKey(a => a.PlacementDriveId)
-                    .OnDelete(DeleteBehavior.Cascade);
-                b.HasIndex(a => new { a.PlacementDriveId, a.StudentUserId }).IsUnique();
             });
         }
     }

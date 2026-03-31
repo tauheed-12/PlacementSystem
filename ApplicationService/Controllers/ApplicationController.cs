@@ -1,56 +1,92 @@
 using ApplicationService.Constants;
 using ApplicationService.DTO;
-using ApplicationService.Helpers;
+using ApplicationService.Infrastructure;
 using ApplicationService.Services.Interfaces;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ApplicationService.Controllers
 {
     [ApiController]
     [Route("api/application")]
-    [Authorize]
     public class ApplicationController : ControllerBase
     {
         private readonly IApplicationService _service;
+        private readonly RequestContextAccessor _contextAccessor;
 
-        public ApplicationController(IApplicationService service)
+        public ApplicationController(
+            IApplicationService service,
+            RequestContextAccessor contextAccessor)
         {
             _service = service;
+            _contextAccessor = contextAccessor;
         }
 
         [HttpPost("apply")]
-        [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Apply([FromBody] ApplyRequestDto dto, CancellationToken cancellationToken)
         {
-            var studentId = User.GetUserId();
-            var request = new ApplicationRequestDto { DriveId = dto.DriveId, StudentId = studentId };
+            var context = _contextAccessor.GetContext();
+
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
+            var request = new ApplicationRequestDto
+            {
+                DriveId = dto.DriveId,
+                StudentId = context.UserId
+            };
+
             await _service.ApplyAsync(request, cancellationToken);
-            return CreatedAtAction(nameof(GetMyApplications), null, null);
+
+            return Created(string.Empty, null);
         }
 
         [HttpDelete("{applicationId:guid}")]
-        [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Delete(Guid applicationId, CancellationToken cancellationToken)
         {
-            var studentId = User.GetUserId();
-            await _service.DeleteApplication(applicationId, studentId, cancellationToken);
+            var context = _contextAccessor.GetContext();
+
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
+            await _service.DeleteApplication(applicationId, context.UserId, cancellationToken);
+
             return NoContent();
         }
 
         [HttpGet("my-applications")]
-        [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> GetMyApplications(CancellationToken cancellationToken)
         {
-            var studentId = User.GetUserId();
-            return Ok(await _service.GetUsersApplications(studentId, cancellationToken));
+            var context = _contextAccessor.GetContext();
+
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
+            var result = await _service.GetUsersApplications(context.UserId, cancellationToken);
+            return Ok(result);
+        }
+
+        [HttpGet("student/{studentId:guid}")]
+        public async Task<IActionResult> GetStudentApplications(Guid studentId, CancellationToken cancellationToken)
+        {
+            var context = _contextAccessor.GetContext();
+
+            if (!context.HasAnyRole(Roles.Admin, Roles.Recruiter, Roles.PlacementCoordinator, Roles.TPO))
+                return Forbid();
+
+            var result = await _service.GetStudentApplication(studentId, cancellationToken);
+            return Ok(result);
         }
 
         [HttpGet("drive/{driveId:guid}/applications")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator},{Roles.TPO}")]
         public async Task<IActionResult> GetDriveApplications(Guid driveId, CancellationToken cancellationToken)
         {
-            return Ok(await _service.GetDriveApplications(driveId, cancellationToken));
+            var context = _contextAccessor.GetContext();
+
+            if (!context.HasAnyRole(Roles.Admin, Roles.Recruiter, Roles.PlacementCoordinator, Roles.TPO))
+                return Forbid();
+
+            var result = await _service.GetDriveApplications(driveId, cancellationToken);
+            return Ok(result);
         }
     }
 }

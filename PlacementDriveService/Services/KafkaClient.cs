@@ -9,57 +9,94 @@ using PlacementDriveService.Services.Interfaces;
 
 namespace PlacementDriveService.Services
 {
-    public class KafkaClient : IKafkaClient
+    public class KafkaClient : IKafkaClient, IDisposable
     {
         private readonly IProducer<string, string> _producer;
         private readonly ConsumerConfig _consumerConfig;
 
-        public KafkaClient(IConfiguration config)
+        public KafkaClient()
         {
             var producerConfig = new ProducerConfig
             {
-                BootstrapServers = config["Kafka:BootstrapServers"]
+                BootstrapServers = "localhost:9092",
+                Acks = Acks.All
             };
-
-            _producer = new ProducerBuilder<string, string>(producerConfig).Build();
 
             _consumerConfig = new ConsumerConfig
             {
-                BootstrapServers = config["Kafka:BootstrapServers"],
-                GroupId = "default-group",
-                AutoOffsetReset = AutoOffsetReset.Earliest
+                BootstrapServers = "localhost:9092",
+                GroupId = "notification-service",
+                AutoOffsetReset = AutoOffsetReset.Earliest,
+                EnableAutoCommit = false
             };
+
+            _producer = new ProducerBuilder<string, string>(producerConfig).Build();
         }
 
-        //Publish
+        // PRODUCE MESSAGE
         public async Task Publish<T>(string topic, string key, T message)
         {
-            var json = JsonSerializer.Serialize(message);
+            var payload = JsonSerializer.Serialize(message);
 
-            await _producer.ProduceAsync(topic, new Message<string, string>
-            {
-                Key = key,
-                Value = json
-            });
+            await _producer.ProduceAsync(
+                topic,
+                new Message<string, string>
+                {
+                    Key = key,
+                    Value = payload
+                });
         }
 
-        //Consume
-        public async IAsyncEnumerable<T> Consume<T>(
+        // CONSUME MESSAGE
+        public async IAsyncEnumerable<(T Message, IConsumer<string, string> Consumer, ConsumeResult<string, string> Result)>
+        Consume<T>(
             string topic,
-            [System.Runtime.CompilerServices.EnumeratorCancellation]
-            CancellationToken cancellationToken)
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token)
         {
-            using var consumer = new ConsumerBuilder<string, string>(_consumerConfig).Build();
-
+            var consumer = new ConsumerBuilder<string, string>(_consumerConfig).Build();
             consumer.Subscribe(topic);
 
-            while (!cancellationToken.IsCancellationRequested)
+            try
             {
-                var result = consumer.Consume(cancellationToken);
+                while (!token.IsCancellationRequested)
+                {
+                    ConsumeResult<string, string>? result;
 
-                var message = JsonSerializer.Deserialize<T>(result.Message.Value);
-                yield return message!;
+                    try
+                    {
+                        result = consumer.Consume(token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+
+                    if (result?.Message?.Value == null)
+                        continue;
+
+                    var message = JsonSerializer.Deserialize<T>(result.Message.Value)!;
+
+                    yield return (message, consumer, result);
+
+                    await Task.Yield();
+                }
             }
+            finally
+            {
+                try { consumer.Close(); } catch { }
+                consumer.Dispose();
+            }
+        }
+
+        // MANUAL COMMIT
+        public void Commit(IConsumer<string, string> consumer, ConsumeResult<string, string> result)
+        {
+            consumer.Commit(result);
+        }
+
+        public void Dispose()
+        {
+            _producer?.Dispose();
         }
     }
 }

@@ -8,6 +8,5 @@
         public string? Branch { get; set; } 
         public int? Year { get; set; }
         public decimal? CGPA { get; set; }
-        public List<string>? Skills { get; set; } 
     }
 }

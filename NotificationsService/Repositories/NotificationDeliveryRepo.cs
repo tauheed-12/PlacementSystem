@@ -1,5 +1,6 @@
 ﻿using NotificationsService.Data;
 using NotificationsService.Entites;
+using NotificationsService.Entities;
 using NotificationsService.Enums;
 using NotificationsService.Repositories.Interfaces;
 

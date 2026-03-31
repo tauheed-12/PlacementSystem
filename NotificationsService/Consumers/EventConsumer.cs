@@ -38,14 +38,25 @@ namespace NotificationsService.Consumers
                     if (await _intentRepo.IsEventProcessed(evt.EventId))
                         continue;
 
-                    var userPrefs = await _prefsRepo.GetAsync(evt.UserId);
+                    _logger.LogInformation("Received event {EventId} of type {EventType}", evt.EventId, evt.EventType);
+                    IEnumerable<UserNotificationPreferences> audience = evt.AudienceType switch
+                    { 
+                        AudienceType.Broadcast => await _prefsRepo.GetAllAsync(),
 
-                    if (userPrefs == null)
-                        continue;
+                        AudienceType.Targeted when evt.TargetUserIds?.Count > 0 => await _prefsRepo.GetByUserIdsAsync(evt.TargetUserIds),
 
-                    await HandleDrivePublishedEvent(evt, userPrefs);
+                        _=> Enumerable.Empty<UserNotificationPreferences>()
+                    };
+                    _logger.LogInformation("Processing event {EventId} for {AudienceCount} users", evt.EventId, audience.Count());  
+
+                    foreach (var prefs in audience)
+                    {
+                        await HandleDrivePublishedEvent(evt, prefs);
+                    }
 
                     await _intentRepo.MarkEventAsProcessed(evt.EventId);
+                    _logger.LogInformation("Processed event {EventId} for {AudienceCount} users", evt.EventId, audience.Count());
+
                     _kafkaClient.Commit(consumer, result);
                 }
                 catch (Exception ex)
@@ -60,11 +71,12 @@ namespace NotificationsService.Consumers
             UserNotificationPreferences prefs)
         {
             var company = evt.Data?.GetValueOrDefault("CompanyName") ?? "a company";
-
+            
+            _logger.LogInformation("Handling drive published event {EventId} for user {UserId} with company {Company}", evt.EventId, prefs.UserId, company);
             var intent = new NotificationIntent
             {
                 IntentId = Guid.NewGuid(),
-                UserId = evt.UserId,
+                UserId = prefs.UserId,
                 EventType = evt.EventType,
                 Title = $"New drive published by {company}",
                 Body = $"A new drive has been published by {company}. Check it out!",
@@ -72,9 +84,11 @@ namespace NotificationsService.Consumers
             };
 
             await _intentRepo.AddAsync(intent);
+            _logger.LogInformation("Created notification intent {IntentId} for user {UserId}", intent.IntentId, prefs.UserId);
 
             if (prefs.EmailEnabled)
             {
+                _logger.LogInformation("User {UserId} has email enabled. Creating email delivery for intent {IntentId}", prefs.UserId, intent.IntentId);
                 var delivery = new NotificationDelivery
                 {
                     Id = Guid.NewGuid(),
@@ -89,15 +103,18 @@ namespace NotificationsService.Consumers
                 };
 
                 await _deliveryRepo.AddAsync(delivery);
+                _logger.LogInformation("Created email delivery {DeliveryId} for intent {IntentId} and user {UserId}", delivery.Id, intent.IntentId, prefs.UserId);
 
                 await _kafkaClient.Publish(
                     "notifications.delivery.email",
                     delivery.Id.ToString(),
                     delivery);
+                _logger.LogInformation("Published email delivery {DeliveryId} to Kafka for intent {IntentId} and user {UserId}", delivery.Id, intent.IntentId, prefs.UserId);
             }
 
             if (prefs.InAppEnabled)
             {
+                _logger.LogInformation("User {UserId} has in-app enabled. Creating in-app delivery for intent {IntentId}", prefs.UserId, intent.IntentId);
                 var delivery = new NotificationDelivery
                 {
                     Id = Guid.NewGuid(),
@@ -112,11 +129,13 @@ namespace NotificationsService.Consumers
                 };
 
                 await _deliveryRepo.AddAsync(delivery);
+                _logger.LogInformation("Created in-app delivery {DeliveryId} for intent {IntentId} and user {UserId}", delivery.Id, intent.IntentId, prefs.UserId);
 
                 await _kafkaClient.Publish(
                     "notifications.delivery.inapp",
                     delivery.Id.ToString(),
                     delivery);
+                _logger.LogInformation("Published in-app delivery {DeliveryId} to Kafka for intent {IntentId} and user {UserId}", delivery.Id, intent.IntentId, prefs.UserId);
             }
         }
     }

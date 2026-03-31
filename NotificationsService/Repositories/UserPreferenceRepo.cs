@@ -1,4 +1,5 @@
-﻿using NotificationsService.Data;
+﻿using Microsoft.EntityFrameworkCore;
+using NotificationsService.Data;
 using NotificationsService.Entites;
 using NotificationsService.Repositories.Interfaces;
 
@@ -39,6 +40,24 @@ namespace NotificationsService.Repositories
                 _notificationDbContext.UserNotificationPreferences.Update(preference);
             }
             await _notificationDbContext.SaveChangesAsync();
+        }
+
+        public async Task<IEnumerable<UserNotificationPreferences>> GetAllAsync()
+        {
+            return await _notificationDbContext.UserNotificationPreferences.ToListAsync();
+        }
+
+        public async Task<IEnumerable<UserNotificationPreferences>> GetByUserIdsAsync(IEnumerable<Guid> userIds)
+        {
+            if (userIds == null || !userIds.Any())
+            {
+                _logger.LogWarning("GetByUserIdsAsync called with null or empty userIds");
+                return Enumerable.Empty<UserNotificationPreferences>();
+            }
+
+            return await _notificationDbContext.UserNotificationPreferences
+                .Where(p => userIds.Contains(p.UserId))
+                .ToListAsync();
         }
     }
 }

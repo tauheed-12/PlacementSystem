@@ -1,11 +1,11 @@
 ﻿using AuthService.DTOs;
 using AuthService.Entities;
 using AuthService.Enums;
+using AuthService.Exceptions;
 using AuthService.Helpers;
 using AuthService.Interfaces;
 using AuthService.Repositories.Interfaces;
 using AuthService.Services.Interfaces;
-using Azure.Core;
 
 namespace AuthService.Services
 {
@@ -33,7 +33,7 @@ namespace AuthService.Services
             dto.Email = dto.Email.Trim().ToLower();
 
             if (await _repo.EmailExistsAsync(dto.Email))
-                throw new InvalidOperationException("Email already in use");
+                throw new ConflictException("Email already in use");
            
             PasswordHasher.CreatePasswordHash(dto.Password, out var hash, out var salt);
 
@@ -75,13 +75,13 @@ namespace AuthService.Services
         {
             dto.Email = dto.Email.Trim().ToLower();
             var user = await _repo.GetByEmailAsync(dto.Email)
-                ?? throw new UnauthorizedAccessException();
+                ?? throw new NotFoundException("User not found");
 
             if (!PasswordHasher.VerifyPassword(dto.Password, user.PasswordHash, user.PasswordSalt))
-                throw new UnauthorizedAccessException();
+                throw new ValidationException("Invalid password");
 
             if (!user.IsEmailVerified)
-                throw new UnauthorizedAccessException("Email not verified");
+                throw new ValidationException("Email is not verified");
 
             var roles = user.UserRoles.Select(r => r.Role!.Name).ToList();
             var accessToken = _tokenService.CreateToken(user, roles);
@@ -106,10 +106,10 @@ namespace AuthService.Services
         public async Task VerifyEmailAsync(string token)
         {
             var userToken = await _repo.GetValidUserTokenAsync(token, UserTokenType.EmailVerification)
-                ?? throw new InvalidOperationException("Invalid token");
+                ?? throw new NotFoundException("Invalid token");
 
             var user = await _repo.GetByIdAsync(userToken.UserId)
-                ?? throw new InvalidOperationException();
+                ?? throw new NotFoundException("User not found");
 
             user.IsEmailVerified = true;
             userToken.IsUsed = true;
@@ -141,10 +141,10 @@ namespace AuthService.Services
         public async Task ResetPasswordAsync(ResetPasswordDto dto)
         {
             var token = await _repo.GetValidUserTokenAsync(dto.Token, UserTokenType.PasswordReset)
-                ?? throw new InvalidOperationException();
+                ?? throw new NotFoundException("Invalid token");
 
             var user = await _repo.GetByIdAsync(token.UserId)
-                ?? throw new InvalidOperationException();
+                ?? throw new NotFoundException("User not found");
 
             PasswordHasher.CreatePasswordHash(dto.NewPassword, out var hash, out var salt);
             user.PasswordHash = hash;
@@ -158,7 +158,7 @@ namespace AuthService.Services
         {
             var hashed = TokenService.HashToken(refreshToken);
             var stored = await _repo.GetValidRefreshTokenAsync(hashed)
-                ?? throw new UnauthorizedAccessException();
+                ?? throw new NotFoundException("Refresh token not found");
 
             stored.IsRevoked = true;
             stored.RevokedAt = DateTime.UtcNow;

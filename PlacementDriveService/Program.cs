@@ -1,16 +1,13 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using PlacementDriveService.Data;
+using PlacementDriveService.Middleware;
+using PlacementDriveService.Repositries;
+using PlacementDriveService.Repositries.Interfaces;
 using PlacementDriveService.Services;
 using PlacementDriveService.Services.Interfaces;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
-
 
 // ----------------------------------------------------
 // Configuration
@@ -20,14 +17,12 @@ builder.Configuration
     .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-
 // ----------------------------------------------------
 // Logging
 // ----------------------------------------------------
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
-
 
 // ----------------------------------------------------
 // Database Configuration
@@ -45,70 +40,25 @@ builder.Services.AddDbContext<PlacementDriveDbContext>(options =>
         })
 );
 
-
-// ----------------------------------------------------
-// JWT Authentication
-// ----------------------------------------------------
-var jwtKey = builder.Configuration["Jwt:Key"];
-
-if (string.IsNullOrWhiteSpace(jwtKey))
-{
-    throw new InvalidOperationException(
-        "Configuration error: 'Jwt:Key' is missing."
-    );
-}
-
-var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
-
-if (keyBytes.Length < 16)
-{
-    throw new InvalidOperationException(
-        "Configuration error: 'Jwt:Key' is too short. Provide at least 128 bits."
-    );
-}
-
-builder.Services
-    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-
-            IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
-
-            NameClaimType = JwtRegisteredClaimNames.Sub,
-            RoleClaimType = ClaimTypes.Role
-        };
-    });
-
-builder.Services.AddAuthorization();
-
-
 // ----------------------------------------------------
 // Controllers
 // ----------------------------------------------------
 builder.Services.AddControllers();
 
+// ----------------------------------------------------
+// HTTP Context Accessor
+// Needed to read X-User-Id and X-User-Role headers
+// forwarded by the API Gateway
+// ----------------------------------------------------
+builder.Services.AddHttpContextAccessor();
 
 // ----------------------------------------------------
-// Application Services
+// Application Services & Repositories
 // ----------------------------------------------------
 builder.Services.AddSingleton<IKafkaClient, KafkaClient>();
 
-builder.Services.AddScoped<IPlacementDriveService,
-    PlacementDriveService.Services.PlacementDriveService>();
-
-builder.Services.AddScoped<
-    PlacementDriveService.Repositries.Interfaces.IPlacementDriveRepository,
-    PlacementDriveService.Repositries.PlacementDriveRepository>();
-
+builder.Services.AddScoped<IPlacementDriveService, PlacementDriveService.Services.PlacementDriveService>();
+builder.Services.AddScoped<IPlacementDriveRepository, PlacementDriveRepository>();
 
 // ----------------------------------------------------
 // Health Checks
@@ -116,9 +66,8 @@ builder.Services.AddScoped<
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<PlacementDriveDbContext>("database");
 
-
 // ----------------------------------------------------
-// Swagger + JWT Authorization
+// Swagger
 // ----------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 
@@ -130,14 +79,21 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1"
     });
 
-    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    // Simulates gateway header forwarding during local dev testing
+    options.AddSecurityDefinition("GatewayHeaders", new OpenApiSecurityScheme
     {
-        Name = "Authorization",
-        Type = SecuritySchemeType.Http,
-        Scheme = "Bearer",
-        BearerFormat = "JWT",
+        Name = "X-User-Id",
+        Type = SecuritySchemeType.ApiKey,
         In = ParameterLocation.Header,
-        Description = "Enter token as: Bearer {your token}"
+        Description = "Paste a user GUID to simulate gateway forwarding"
+    });
+
+    options.AddSecurityDefinition("X-User-Role", new OpenApiSecurityScheme
+    {
+        Name = "X-User-Role",
+        Type = SecuritySchemeType.ApiKey,
+        In = ParameterLocation.Header,
+        Description = "User Role (e.g. admin, student)"
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -147,21 +103,30 @@ builder.Services.AddSwaggerGen(options =>
             {
                 Reference = new OpenApiReference
                 {
-                    Id = "Bearer",
-                    Type = ReferenceType.SecurityScheme
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "X-User-Id"
                 }
             },
-            Array.Empty<string>()
+            new string[] {}
+        },
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "X-User-Role"
+                }
+            },
+            new string[] {}
         }
     });
 });
-
 
 // ----------------------------------------------------
 // Build Application
 // ----------------------------------------------------
 var app = builder.Build();
-
 
 // ----------------------------------------------------
 // Middleware Pipeline
@@ -174,8 +139,8 @@ if (app.Environment.IsDevelopment())
 
 app.UseMiddleware<PlacementDriveService.Middleware.GlobalExceptionMiddleware>();
 
-app.UseAuthentication();
-app.UseAuthorization();
+app.UseHttpsRedirection();
+app.UseGlobalExceptionMiddleware();
 
 app.MapControllers();
 app.MapHealthChecks("/health");

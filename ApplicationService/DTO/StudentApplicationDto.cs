@@ -1,0 +1,10 @@
+﻿namespace ApplicationService.DTO
+{
+    public class StudentApplicationDto
+    {
+        public Guid Id { get; set; }
+        public Guid DriveId { get; set; }
+        public DateTime AppliedOn { get; set; }
+        public string Status { get; set; } = string.Empty;
+    }
+}

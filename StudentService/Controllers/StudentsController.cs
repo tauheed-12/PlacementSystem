@@ -1,84 +1,117 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using StudentService.Constants;
 using StudentService.DTOs;
+using StudentService.Infrastructure;
 using StudentService.Services.Interfaces;
-using System.Security.Claims;
 
 namespace StudentService.Controllers
 {
     [ApiController]
     [Route("api/student")]
-    [Authorize]
     public class StudentsController : ControllerBase
     {
         private readonly IStudentService _service;
+        private readonly RequestContextAccessor _requestContextAccessor;
 
-        public StudentsController(IStudentService service)
+        public StudentsController(
+            IStudentService service,
+            RequestContextAccessor requestContextAccessor)
         {
             _service = service;
+            _requestContextAccessor = requestContextAccessor;
         }
 
-        [HttpPost("profile")]
-        [Authorize(Roles = Roles.Student)]
-        public async Task<IActionResult> Create(CreateStudentProfileDto dto)
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateStudentProfileDto dto)
         {
-            Guid userId = GetUserIdFromToken();
-            await _service.CreateProfileAsync(userId, dto);
-            return Created("", null);
+            var context = _requestContextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
+            await _service.CreateProfileAsync(context.UserId, dto);
+            return Created(string.Empty, null);
         }
 
-        [HttpGet("get-profile")]
-        [Authorize(Roles = Roles.Student)]
+        [HttpGet]
         public async Task<IActionResult> Get()
         {
-            var userId = GetUserIdFromToken();
-            return Ok(await _service.GetProfileAsync(userId));
+            var context = _requestContextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
+            var profile = await _service.GetProfileAsync(context.UserId);
+            return Ok(profile);
         }
 
-        [HttpPatch("update-profile")]
-        [Authorize(Roles = Roles.Student)]
-        public async Task<IActionResult> Update(UpdateStudentProfileDto dto)
+        [HttpGet("{studentId:guid}")]
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var userId = GetUserIdFromToken();
-            await _service.UpdateProfileAsync(userId, dto);
+            var context = _requestContextAccessor.GetContext();
+            if (!context.HasAnyRole(Roles.Admin, Roles.TPO, Roles.PlacementCoordinator, Roles.Recruiter))
+                return Forbid();
+
+            var profile = await _service.GetProfileByIdAsync(id);
+            return Ok(profile);
+        }
+
+        [HttpPatch]
+        public async Task<IActionResult> Update([FromBody] UpdateStudentProfileDto dto)
+        {
+            var context = _requestContextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
+            await _service.UpdateProfileAsync(context.UserId, dto);
             return NoContent();
         }
 
         [HttpPost("bulk-profiles")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.TPO},{Roles.PlacementCoordinator},{Roles.Recruiter}")]
-        public async Task<IActionResult> Bulk(BulkStudentProfileRequestDto dto)
+        public async Task<IActionResult> Bulk([FromBody] BulkStudentProfileRequestDto dto)
         {
+            var context = _requestContextAccessor.GetContext();
+            if (!context.HasAnyRole(Roles.Admin, Roles.TPO, Roles.PlacementCoordinator, Roles.Recruiter))
+                return Forbid();
+
             if (dto?.UserIds == null || dto.UserIds.Count == 0)
                 return Ok(new List<object>());
+
             if (dto.UserIds.Count > 100)
-                return BadRequest("Maximum 100 user IDs per request.");
-            return Ok(await _service.GetProfilesInBulkAsync(dto.UserIds));
+                return BadRequest(new { error = "Maximum 100 user IDs per request." });
+
+            var profiles = await _service.GetProfilesInBulkAsync(dto.UserIds);
+            return Ok(profiles);
         }
 
         [HttpGet("all-profiles")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.TPO}")]
         public async Task<IActionResult> All()
         {
-            return Ok(await _service.GetAllProfilesAsync());
+            var context = _requestContextAccessor.GetContext();
+            if (!context.HasAnyRole(Roles.Admin, Roles.TPO))
+                return Forbid();
+
+            var profiles = await _service.GetAllProfilesAsync();
+            return Ok(profiles);
         }
 
         [HttpDelete("{id:guid}")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.TPO},{Roles.PlacementCoordinator}")]
         public async Task<IActionResult> Delete(Guid id)
         {
+            var context = _requestContextAccessor.GetContext();
+            if (!context.HasAnyRole(Roles.Admin, Roles.TPO, Roles.PlacementCoordinator))
+                return Forbid();
+
             await _service.DeleteProfileAsync(id);
             return NoContent();
         }
 
-        private Guid GetUserIdFromToken()
+        [HttpGet("profile-progress")]
+        public async Task<IActionResult> GetProfileProgress()
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-
-            if (userIdClaim == null)
-                throw new UnauthorizedAccessException("User ID not found in token");
-
-            return Guid.Parse(userIdClaim.Value);
+            var context = _requestContextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+            var progress = await _service.GetProfileCompletionStatusAsync(context.UserId);
+            return Ok(new { profileProgress = progress });
         }
     }
 }

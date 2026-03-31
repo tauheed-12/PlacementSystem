@@ -9,8 +9,6 @@ namespace PlacementDriveService.Services.Interfaces
         Task DeleteDriveAsync(Guid id);
         Task<List<PlacementDriveResponseDto>> GetOpenDrivesAsync(int page, int pageSize);
         Task<PlacementDriveResponseDto> GetDriveByIdAsync(Guid id);
-        Task ApplyAsync(Guid driveId, Guid studentId);
-        Task WithdrawAsync(Guid driveId, Guid studentId);
         Task<List<PlacementDriveResponseDto>> GetDrivesBulkAsync(List<Guid> driveIds);
     }
 }

@@ -1,8 +1,7 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
-using StudentService.Helpers;
+﻿using Microsoft.AspNetCore.Mvc;
+using StudentService.Constants;
+using StudentService.Infrastructure;
 using StudentService.Services.Interfaces;
-using System.Security.Claims;
 
 namespace StudentService.Controllers
 {
@@ -11,47 +10,52 @@ namespace StudentService.Controllers
     public class SkillController : ControllerBase
     {
         private readonly ISkillService _service;
+        private readonly RequestContextAccessor _requestContextAccessor;
 
-        public SkillController(ISkillService service)
+        public SkillController(
+            ISkillService service,
+            RequestContextAccessor requestContextAccessor)
         {
             _service = service;
+            _requestContextAccessor = requestContextAccessor;
         }
 
-        [Authorize]
-        [HttpPost]
-        public async Task<IActionResult> AddSkill(string skillName)
+        public class AddSkillRequest
         {
-            var userId = GetUserIdFromToken();
-            await _service.AddSkillAsync(userId, skillName);
+            public string SkillName { get; set; }
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> AddSkill([FromBody] AddSkillRequest request)
+        {
+            var context = _requestContextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
+            await _service.AddSkillAsync(context.UserId, request.SkillName);
             return Ok();
         }
 
-        [Authorize]
         [HttpDelete("{skillId}")]
         public async Task<IActionResult> RemoveSkill(Guid skillId)
         {
-            var userId = GetUserIdFromToken();
-            await _service.RemoveSkillAsync(userId, skillId);
+            var context = _requestContextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
+            await _service.RemoveSkillAsync(context.UserId, skillId);
             return Ok();
         }
 
-        [Authorize]
         [HttpGet]
         public async Task<IActionResult> GetSkills()
         {
-            var userId = GetUserIdFromToken();
-            return Ok(await _service.GetSkillsAsync(userId));
-        }
+            var context = _requestContextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
 
-
-        private Guid GetUserIdFromToken()
-        {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-
-            if (userIdClaim == null)
-                throw new UnauthorizedAccessException("User ID not found in token");
-
-            return Guid.Parse(userIdClaim.Value);
+            var skills = await _service.GetSkillsAsync(context.UserId);
+            return Ok(skills);
         }
     }
 }

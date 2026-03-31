@@ -2,8 +2,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PlacementDriveService.Constants;
 using PlacementDriveService.DTOs;
+using PlacementDriveService.Infrastructure;
 using PlacementDriveService.Services.Interfaces;
-using PlacementDriveService.NewFolder;
 
 namespace PlacementDriveService.Controllers
 {
@@ -13,78 +13,87 @@ namespace PlacementDriveService.Controllers
     public class PlacementDriveController : ControllerBase
     {
         private readonly IPlacementDriveService _service;
+        private readonly RequestContextAccessor _requestContextAccessor;
 
-        public PlacementDriveController(IPlacementDriveService service)
+        public PlacementDriveController(IPlacementDriveService service, RequestContextAccessor requestContextAccessor)
         {
             _service = service;
+            _requestContextAccessor = requestContextAccessor;
         }
 
+
         [HttpPost]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator}")]
         public async Task<IActionResult> Create(PlacementDriveCreateDto dto)
         {
-            Guid userId = User.GetUserId();
-            var id = await _service.CreateDriveAsync(dto, userId);
+            var context = _requestContextAccessor.GetContext();
+            if (!context.HasAnyRole(Roles.Admin, Roles.Recruiter, Roles.PlacementCoordinator))
+                return Forbid();
+
+            var id = await _service.CreateDriveAsync(dto, context.UserId);
+
             return CreatedAtAction(nameof(GetById), new { id }, null);
         }
 
+
         [HttpPut("{id}")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator}")]
         public async Task<IActionResult> Update(Guid id, PlacementDriveUpdateDto dto)
         {
+            var context = _requestContextAccessor.GetContext();
+            if(!context.HasAnyRole(Roles.PlacementCoordinator, Roles.Admin, Roles.Recruiter))
+                return Forbid();
+
             await _service.UpdateDriveAsync(id, dto);
             return NoContent();
         }
 
+
         [HttpDelete("{id}")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator}")]
         public async Task<IActionResult> Delete(Guid id)
         {
+            var context = _requestContextAccessor.GetContext();
+            if (!context.HasAnyRole(Roles.PlacementCoordinator, Roles.Admin, Roles.Recruiter))
+                return Forbid();
+
             await _service.DeleteDriveAsync(id);
             return NoContent();
         }
 
+
         [HttpGet]
-        [Authorize(Roles = Roles.Student)]
         public async Task<IActionResult> Get(int page = 1, int pageSize = 10)
         {
+            var context = _requestContextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student))
+                return Forbid();
+
             if (page < 1) page = 1;
             if (pageSize < 1 || pageSize > 100) pageSize = 10;
             return Ok(await _service.GetOpenDrivesAsync(page, pageSize));
         }
 
+
         [HttpGet("{id}")]
-        [AllowAnonymous]
         public async Task<IActionResult> GetById(Guid id)
         {
+            var context = _requestContextAccessor.GetContext();
+            if (!context.HasAnyRole(Roles.Student, Roles.TPO, Roles.Admin, Roles.PlacementCoordinator))
+                return Forbid();
+
             return Ok(await _service.GetDriveByIdAsync(id));
         }
 
+
         [HttpPost("bulk")]
-        [Authorize(Roles = $"{Roles.Admin},{Roles.Recruiter},{Roles.PlacementCoordinator},{Roles.Student}")]
         public async Task<IActionResult> Bulk([FromBody] List<Guid> driveIds)
         {
+            var context = _requestContextAccessor.GetContext();
+            if (!context.HasAnyRole(Roles.Student, Roles.TPO, Roles.Admin, Roles.PlacementCoordinator))
+                return Forbid();
+
             if (driveIds == null || driveIds.Count == 0)
                 return Ok(new List<PlacementDriveResponseDto>());
+
             return Ok(await _service.GetDrivesBulkAsync(driveIds));
-        }
-
-        [HttpPost("{id}/apply")]
-        [Authorize(Roles = Roles.Student)]
-        public async Task<IActionResult> Apply(Guid id)
-        {
-            var studentId = User.GetUserId();
-            await _service.ApplyAsync(id, studentId);
-            return CreatedAtAction(nameof(GetById), new { id }, null);
-        }
-
-        [HttpDelete("{id}/apply")]
-        [Authorize(Roles = Roles.Student)]
-        public async Task<IActionResult> Withdraw(Guid id)
-        {
-            var studentId = User.GetUserId();
-            await _service.WithdrawAsync(id, studentId);
-            return NoContent();
         }
     }
 }

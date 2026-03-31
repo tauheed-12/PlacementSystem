@@ -1,5 +1,6 @@
 using AuthService.Data;
 using AuthService.Interfaces;
+using AuthService.Middleware;
 using AuthService.Repositories;
 using AuthService.Repositories.Interfaces;
 using AuthService.Services;
@@ -135,14 +136,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseGlobalExceptionMiddleware();
 app.UseHttpsRedirection();
 
 app.UseCors("AllowFrontend");
 
-app.UseMiddleware<AuthService.Middleware.GlobalExceptionMiddleware>();
-
 app.UseAuthentication();
-app.UseAuthorization();
 
 app.MapControllers();
 app.MapHealthChecks("/health");

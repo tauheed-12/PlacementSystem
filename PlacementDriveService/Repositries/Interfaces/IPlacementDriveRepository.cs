@@ -9,10 +9,5 @@ namespace PlacementDriveService.Repositries.Interfaces
         Task DeleteAsync(PlacementDrive drive);
         Task SaveChangesAsync();
         IQueryable<PlacementDrive> GetOpenDrives();
-        Task<bool> HasStudentApplied(Guid driveId, Guid studentId);
-        Task AddApplicationAsync(PlacementApplication application);
-        void RemoveApplication(PlacementApplication application);
-        Task<PlacementApplication?> GetApplication(Guid driveId, Guid studentId);
-        IQueryable<PlacementApplication> GetStudentApplications(Guid studentId);
     }
 }

@@ -12,8 +12,7 @@ namespace StudentService.Services.Interfaces
         Task DeleteProfileAsync(Guid studentId);
         Task<List<StudentProfileResponseDto>> GetAllProfilesAsync();
         Task<List<StudentProfileResponseDto>> GetProfilesInBulkAsync(List<Guid> userIds);
-        Task<decimal> GetProfileProgressAsync(Guid userId);
-        Task<ProfileCompletionDto> GetProfileCompletionStatus(Guid userId);
-        Task UpdateSkills(List<StudentSkill> skills);
+        Task<ProfileCompletionDto> GetProfileCompletionStatusAsync(Guid userId);
+        Task<StudentProfileShortDto> GetProfileByIdAsync(Guid studentId);
     }
 }

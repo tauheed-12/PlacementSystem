@@ -1,15 +1,8 @@
 using AuthService.Data;
 using AuthService.DTOs;
-using AuthService.Entities;
-using AuthService.Enums;
-using AuthService.Helpers;
-using AuthService.Interfaces;
-using AuthService.Services;
 using AuthService.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
 namespace AuthService.Controllers
 {
@@ -25,7 +18,6 @@ namespace AuthService.Controllers
         }
 
         [HttpPost("register")]
-        [AllowAnonymous]
         public async Task<IActionResult> Register(RegisterDto dto)
         {
             await _service.RegisterAsync(dto);
@@ -33,7 +25,6 @@ namespace AuthService.Controllers
         }
 
         [HttpPost("login")]
-        [AllowAnonymous]
         public async Task<IActionResult> Login(LoginDto dto)
         {
             var res = await _service.LoginAsync(dto);
@@ -46,7 +37,6 @@ namespace AuthService.Controllers
         }
 
         [HttpGet("verify-email")]
-        [AllowAnonymous]
         public async Task<IActionResult> VerifyEmail(string token)
         {
             await _service.VerifyEmailAsync(token);
@@ -54,7 +44,6 @@ namespace AuthService.Controllers
         }
 
         [HttpPost("forgot-password")]
-        [AllowAnonymous]
         public async Task<IActionResult> Forgot(ForgotPasswordDto dto)
         {
             await _service.ForgotPasswordAsync(dto);
@@ -62,7 +51,6 @@ namespace AuthService.Controllers
         }
 
         [HttpPost("reset-password")]
-        [AllowAnonymous]
         public async Task<IActionResult> Reset(ResetPasswordDto dto)
         {
             await _service.ResetPasswordAsync(dto);
@@ -70,7 +58,6 @@ namespace AuthService.Controllers
         }
 
         [HttpPost("refresh-token")]
-        [AllowAnonymous]
         public async Task<IActionResult> Refresh()
         {
             var refreshToken = Request.Cookies["refreshToken"];
@@ -83,7 +70,6 @@ namespace AuthService.Controllers
         }
 
         [HttpPost("logout")]
-        [AllowAnonymous]
         public async Task<IActionResult> Logout()
         {
             if (Request.Cookies.TryGetValue("refreshToken", out var token))
