@@ -12,8 +12,13 @@ namespace AuthService.Repositories.Interfaces
         Task AddUserRoleAsync(UserRole role);
         Task AddUserTokenAsync(UserToken token);
         Task AddRefreshTokenAsync(RefreshToken token);
+        Task AddOutboxMessageAsync(OutboxMessage message);
         Task<UserToken?> GetValidUserTokenAsync(string token, UserTokenType type);
         Task<RefreshToken?> GetValidRefreshTokenAsync(string hashedToken);
         Task SaveChangesAsync();
+        void RevokeUserToken(UserToken token);
+        void RevokeRefreshToken(RefreshToken token);
+        Task<UserToken?> GetValidUserTokenByUserIdAsync(Guid userId, UserTokenType type);
+        Task<List<OutboxMessage>> GetUnProcessedOutboxMessagesAsync();
     }
 }

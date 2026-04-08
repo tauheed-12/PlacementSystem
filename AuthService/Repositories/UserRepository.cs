@@ -62,6 +62,27 @@ namespace AuthService.Repositories
                 t.ExpiresAt > DateTime.UtcNow);
         }
 
+        public void RevokeUserToken(UserToken token)
+        {
+            token.IsUsed = true;
+            _db.UserTokens.Update(token);
+        }
+
+        public void RevokeRefreshToken(RefreshToken token)
+        {
+            token.IsRevoked = true;
+            _db.RefreshTokens.Update(token);
+        }
+
+        public async Task<UserToken?> GetValidUserTokenByUserIdAsync(Guid userId, UserTokenType type)
+        {
+            return await _db.UserTokens.FirstOrDefaultAsync(t =>
+                t.UserId == userId &&
+                t.TokenType == type &&
+                !t.IsUsed &&
+                t.ExpiresAt > DateTime.UtcNow);
+        }
+
         public async Task<RefreshToken?> GetValidRefreshTokenAsync(string hashedToken)
         {
             return await _db.RefreshTokens
@@ -72,6 +93,21 @@ namespace AuthService.Repositories
                     rt.TokenHash == hashedToken &&
                     !rt.IsRevoked &&
                     rt.ExpiresAt > DateTime.UtcNow);
+        }
+
+        public async Task AddOutboxMessageAsync(OutboxMessage message)
+        {
+            await _db.OutboxMessages.AddAsync(message);
+        }
+
+        public async Task<List<OutboxMessage>> GetUnProcessedOutboxMessagesAsync(int batchSize = 50)
+        {
+            return await _db.OutboxMessages
+                .Where(msg => !msg.IsProcessed)
+                .OrderBy(msg => msg.CreatedAt)
+                .Take(batchSize)
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public async Task SaveChangesAsync()

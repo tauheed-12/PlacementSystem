@@ -1,5 +1,4 @@
 using AuthService.Data;
-using AuthService.Interfaces;
 using AuthService.Middleware;
 using AuthService.Repositories;
 using AuthService.Repositories.Interfaces;
@@ -53,7 +52,6 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService.Services.AuthService>();
-builder.Services.AddScoped<IEmailService, EmailService>();
 
 
 // -----------------------------------------------------

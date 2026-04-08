@@ -1,8 +1,8 @@
 ﻿using Confluent.Kafka;
 
-namespace PlacementDriveService.Services.Interfaces
+namespace AuthService.Services.Interfaces
 {
-    public interface IKafkaClient
+    public interface IKafkaService
     {
         IAsyncEnumerable<(T Message, IConsumer<string, string> Consumer, ConsumeResult<string, string> Result)> Consume<T>(string topic, CancellationToken token);
         Task Publish<T>(string topic, string key, T message);

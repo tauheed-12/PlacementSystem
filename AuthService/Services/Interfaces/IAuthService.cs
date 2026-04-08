@@ -4,12 +4,12 @@ namespace AuthService.Services.Interfaces
 {
     public interface IAuthService
     {
-        Task RegisterAsync(RegisterDto dto);
-        Task<AuthResponseDto> LoginAsync(LoginDto dto);
+        Task RegisterAsync(RegisterRequest request);
+        Task<LoginResponse> LoginAsync(LoginRequest request);
         Task VerifyEmailAsync(string token);
 
-        Task ForgotPasswordAsync(ForgotPasswordDto dto);
-        Task ResetPasswordAsync(ResetPasswordDto dto);
+        Task ForgotPasswordAsync(ForgotPasswordRequest request);
+        Task ResetPasswordAsync(ResetPasswordRequest request);
 
         Task<string> RefreshTokenAsync(string refreshToken);
         Task LogoutAsync(string refreshToken);

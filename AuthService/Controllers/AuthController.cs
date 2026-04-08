@@ -1,8 +1,9 @@
-using AuthService.Data;
 using AuthService.DTOs;
+using AuthService.Middleware;
 using AuthService.Services.Interfaces;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+
 
 namespace AuthService.Controllers
 {
@@ -18,16 +19,24 @@ namespace AuthService.Controllers
         }
 
         [HttpPost("register")]
-        public async Task<IActionResult> Register(RegisterDto dto)
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
-            await _service.RegisterAsync(dto);
-            return Ok("Registered");
+            try
+            {
+                await _service.RegisterAsync(request);
+                return Ok("Registered successfully!, Please verify your email");
+            }
+            catch (DbUpdateException ex)
+            {
+                throw new ConflictException("Email already exists");
+            }
         }
 
+
         [HttpPost("login")]
-        public async Task<IActionResult> Login(LoginDto dto)
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            var res = await _service.LoginAsync(dto);
+            var res = await _service.LoginAsync(request);
             SetRefreshTokenCookie(res.RefreshToken); 
 
             return Ok(new
@@ -36,26 +45,30 @@ namespace AuthService.Controllers
             });
         }
 
+
         [HttpGet("verify-email")]
         public async Task<IActionResult> VerifyEmail(string token)
         {
             await _service.VerifyEmailAsync(token);
-            return Ok("Verified");
+            return Ok("Email verified successfully!");
         }
+
 
         [HttpPost("forgot-password")]
-        public async Task<IActionResult> Forgot(ForgotPasswordDto dto)
+        public async Task<IActionResult> Forgot([FromBody] ForgotPasswordRequest request)
         {
-            await _service.ForgotPasswordAsync(dto);
-            return Ok();
+            await _service.ForgotPasswordAsync(request);
+            return Ok("Verification mail sent successfully");
         }
 
+
         [HttpPost("reset-password")]
-        public async Task<IActionResult> Reset(ResetPasswordDto dto)
+        public async Task<IActionResult> Reset([FromBody] ResetPasswordRequest request)
         {
-            await _service.ResetPasswordAsync(dto);
-            return Ok();
+            await _service.ResetPasswordAsync(request);
+            return Ok("Password reset success!");
         }
+
 
         [HttpPost("refresh-token")]
         public async Task<IActionResult> Refresh()
@@ -69,6 +82,7 @@ namespace AuthService.Controllers
             return Ok(new { accessToken = token });
         }
 
+
         [HttpPost("logout")]
         public async Task<IActionResult> Logout()
         {
@@ -76,8 +90,9 @@ namespace AuthService.Controllers
                 await _service.LogoutAsync(token);
 
             Response.Cookies.Delete("refreshToken");
-            return Ok();
+            return Ok("Logout successfully");
         }
+
         private void SetRefreshTokenCookie(string refreshToken)
         {
             Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
