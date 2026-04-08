@@ -1,5 +1,4 @@
-﻿using PlacementDriveService.Constants;
-using System.Threading.Tasks.Dataflow;
+﻿using PlacementDriveService.Enums;
 
 namespace PlacementDriveService.Entities
 {
@@ -15,6 +14,6 @@ namespace PlacementDriveService.Entities
         public DateTime ApplicationDeadline { get; set; }
         public Guid CreatedBy { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public string Status { get; set; } = DriveStatus.Scheduled;
+        public DriveStatus Status { get; set; } = DriveStatus.Scheduled;
     }
 }

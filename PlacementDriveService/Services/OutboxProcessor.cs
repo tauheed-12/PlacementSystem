@@ -1,7 +1,7 @@
-﻿using AuthService.Repositories.Interfaces;
-using AuthService.Services.Interfaces;
+﻿using PlacementDriveService.Repositries.Interfaces;
+using PlacementDriveService.Services.Interfaces;
 
-namespace AuthService.Services
+namespace PlacementDriveService.Services
 {
     public class OutboxProcessor : BackgroundService
     {
@@ -17,16 +17,16 @@ namespace AuthService.Services
             while (!cancellationToken.IsCancellationRequested)
             {
                 using var scope = _serviceScopeFactory.CreateScope();
-                var repo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
-                var kafka = scope.ServiceProvider.GetRequiredService<IKafkaService>();
+                var repo = scope.ServiceProvider.GetRequiredService<IPlacementDriveRepository>();
+                var kafka = scope.ServiceProvider.GetRequiredService<IKafkaClient>();
 
                 var message = await repo.GetUnProcessedOutboxMessagesAsync();
 
-                foreach(var msg in message)
+                foreach (var msg in message)
                 {
                     try
                     {
-                        await kafka.Publish("user-verification", msg.Key ,msg.Payload);
+                        await kafka.Publish("drive-notifications", msg.Key, msg.Payload);
 
                         msg.IsProcessed = true;
                         msg.ProcessedAt = DateTime.UtcNow;

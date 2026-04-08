@@ -12,5 +12,7 @@ namespace ApplicationService.Repositories.Interfaces
 
         Task<List<Application>> GetByDriveIdAsync(Guid driveId,  CancellationToken cancellationToken);
         Task<Application?> GetByApplicationIdAsync(Guid applicationId, CancellationToken cancellationToken);
+
+        Task<bool> ExistsAsync(Guid StudentId, Guid DriveId, CancellationToken cancellationToken);
     }
 }

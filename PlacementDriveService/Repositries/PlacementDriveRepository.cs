@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using PlacementDriveService.Constants;
 using PlacementDriveService.Data;
 using PlacementDriveService.Entities;
+using PlacementDriveService.Enums;
 using PlacementDriveService.Repositries.Interfaces;
 
 namespace PlacementDriveService.Repositries
@@ -34,6 +34,21 @@ namespace PlacementDriveService.Repositries
         public async Task SaveChangesAsync()
         {
             await _db.SaveChangesAsync();
+        }
+
+        public async Task AddOutboxMessageAsync(OutboxMessage message)
+        {
+            await _db.OutboxMessages.AddAsync(message);
+        }
+
+        public async Task<List<OutboxMessage>> GetUnProcessedOutboxMessagesAsync(int batchSize = 50)
+        {
+            return await _db.OutboxMessages
+                .Where(msg => !msg.IsProcessed)
+                .OrderBy(msg => msg.CreatedAt)
+                .Take(batchSize)
+                .AsNoTracking()
+                .ToListAsync();
         }
 
         public IQueryable<PlacementDrive> GetOpenDrives()

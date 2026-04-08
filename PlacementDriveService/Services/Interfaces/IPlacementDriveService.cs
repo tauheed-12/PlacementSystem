@@ -4,11 +4,11 @@ namespace PlacementDriveService.Services.Interfaces
 {
     public interface IPlacementDriveService
     {
-        Task<Guid> CreateDriveAsync(PlacementDriveCreateDto dto, Guid userId);
-        Task UpdateDriveAsync(Guid id, PlacementDriveUpdateDto dto);
+        Task<Guid> CreateDriveAsync(DriveCreateRequest request, Guid userId);
+        Task UpdateDriveAsync(Guid id, DriveUpdateRequest request);
         Task DeleteDriveAsync(Guid id);
-        Task<List<PlacementDriveResponseDto>> GetOpenDrivesAsync(int page, int pageSize);
-        Task<PlacementDriveResponseDto> GetDriveByIdAsync(Guid id);
-        Task<List<PlacementDriveResponseDto>> GetDrivesBulkAsync(List<Guid> driveIds);
+        Task<List<DriveResponse>> GetOpenDrivesAsync(int page, int pageSize);
+        Task<DriveResponse> GetDriveByIdAsync(Guid id);
+        Task<List<DriveResponse>> GetDrivesBulkAsync(List<Guid> driveIds);
     }
 }

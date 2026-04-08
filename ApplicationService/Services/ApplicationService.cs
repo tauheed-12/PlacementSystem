@@ -2,9 +2,9 @@ using ApplicationService.Data.Interfaces;
 using ApplicationService.Repositories.Interfaces;
 using ApplicationService.Services.Interfaces;
 using ApplicationService.Entities;
-using ApplicationService.DTO;
 using ApplicationService.HttpClients.Interfaces;
-using ApplicationService.Exceptions;
+using static ApplicationService.DTO.Dtos;
+using ApplicationService.Middleware;
 
 namespace ApplicationService.Services
 {
@@ -14,7 +14,9 @@ namespace ApplicationService.Services
         private readonly IUnitOfWork _unitOfWork;
         private readonly IPlacementDriveServiceClient _placementDriveServiceClient;
 
-        public ApplicationService(IUnitOfWork unitOfWork, IApplicationRepository repository, 
+        public ApplicationService(
+            IUnitOfWork unitOfWork,
+            IApplicationRepository repository,
             IPlacementDriveServiceClient placementDriveServiceClient)
         {
             _unitOfWork = unitOfWork;
@@ -22,22 +24,33 @@ namespace ApplicationService.Services
             _placementDriveServiceClient = placementDriveServiceClient;
         }
 
-        public async Task ApplyAsync(ApplicationRequestDto request, CancellationToken cancellationToken)
+        // ---------------- APPLY ----------------
+        public async Task ApplyAsync(CreateApplicationRequest request, CancellationToken cancellationToken)
         {
             if (request == null)
-            {
-                throw new ArgumentNullException(nameof(request));
-            }
-            if (request.DriveId == Guid.Empty || request.StudentId == Guid.Empty)
-            {
-                throw new ArgumentException("DriveId and StudentId are required.");
-            }
+                throw new ValidationException("Request cannot be null");
 
-            var existing = await _repository.GetByStudentIdAsync(request.StudentId, cancellationToken);
-            if (existing.Any(a => a.DriveId == request.DriveId))
-            {
-                throw new InvalidOperationException("You have already applied to this drive.");
-            }
+            if (request.DriveId == Guid.Empty)
+                throw new ValidationException("DriveId is required");
+
+            if (request.StudentId == Guid.Empty)
+                throw new ValidationException("StudentId is required");
+
+            var drives = await _placementDriveServiceClient
+                .GetDrivesBulkAsync(new List<Guid> { request.DriveId }, cancellationToken);
+
+            if (!drives.ContainsKey(request.DriveId))
+                throw new NotFoundException("Drive not found");
+
+            var drive = drives[request.DriveId];
+
+            if (drive.ApplicationDeadline < DateTime.UtcNow)
+                throw new ValidationException("Application deadline has passed");
+
+            var alreadyExists = await _repository.ExistsAsync(request.StudentId, request.DriveId, cancellationToken);
+
+            if (alreadyExists)
+                throw new ConflictException("You have already applied to this drive");
 
             var application = Application.Create(request.StudentId, request.DriveId);
 
@@ -45,71 +58,115 @@ namespace ApplicationService.Services
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task DeleteApplication(Guid applicationId, Guid studentId, CancellationToken cancellationToken)
+        // ---------------- DELETE ----------------
+        public async Task DeleteApplicationAsync(Guid applicationId, Guid studentId, CancellationToken cancellationToken)
         {
+            if (applicationId == Guid.Empty)
+                throw new ValidationException("ApplicationId is required");
+
+            if (studentId == Guid.Empty)
+                throw new ValidationException("StudentId is required");
+
             var application = await _repository.GetByApplicationIdAsync(applicationId, cancellationToken);
+
             if (application == null)
-            {
                 throw new NotFoundException("Application not found");
-            }
+
             if (application.StudentUserId != studentId)
+                throw new ForbiddenException("You can only withdraw your own applications");
+
+            var drives = await _placementDriveServiceClient
+                .GetDrivesBulkAsync(new List<Guid> { application.DriveId }, cancellationToken);
+
+            if (drives.ContainsKey(application.DriveId))
             {
-                throw new UnauthorizedAccessException("You can only withdraw your own applications.");
+                var drive = drives[application.DriveId];
+
+                if (drive.ApplicationDeadline < DateTime.UtcNow)
+                    throw new ValidationException("Cannot withdraw application after deadline");
             }
+
             _repository.Remove(application);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
         }
 
-        public async Task<List<UserApplicationsResponseDto>> GetUsersApplications(Guid studentId, CancellationToken cancellationToken)
+        // ---------------- USER APPLICATIONS ----------------
+        public async Task<List<UserApplicationSummary>> GetUserApplicationsAsync(
+            Guid studentId,
+            CancellationToken cancellationToken)
         {
+            if (studentId == Guid.Empty)
+                throw new ValidationException("Invalid student ID");
+
             var applications = await _repository.GetByStudentIdAsync(studentId, cancellationToken);
-            if (applications == null || applications.Count() == 0)
-            {
-                return new List<UserApplicationsResponseDto>();
-            }
+
+            if (!applications.Any())
+                return new List<UserApplicationSummary>();
 
             var driveIds = applications.Select(x => x.DriveId).Distinct().ToList();
 
-            var drives = await _placementDriveServiceClient.GetDrivesBulkAsync(driveIds, cancellationToken);
-            
+            var drives = await _placementDriveServiceClient
+                .GetDrivesBulkAsync(driveIds, cancellationToken);
+
             return applications
                 .Where(a => drives.ContainsKey(a.DriveId))
-                .Select( a =>
+                .Select(a =>
                 {
                     var drive = drives[a.DriveId];
-                    return new UserApplicationsResponseDto
-                    {
-                        ApplicationId = a.Id,
-                        CompanyName = drive.CompanyName, 
-                        Status = a.Status.ToString(),
-                        DriveDate = drive.DriveDate,
-                        AppliedAt = a.AppliedAt
-                    };
+
+                    return new UserApplicationSummary(
+                        a.Id,
+                        drive.CompanyName,
+                        a.Status.ToString(),
+                        a.AppliedAt,
+                        drive.DriveDate
+                    );
                 })
                 .ToList();
         }
 
-        public async Task<List<StudentApplicationDto>> GetStudentApplication(Guid studentId, CancellationToken cancellationToken)
+        // ---------------- STUDENT APPLICATIONS ----------------
+        public async Task<List<StudentApplication>> GetStudentApplicationsAsync(
+            Guid studentId,
+            CancellationToken cancellationToken)
         {
-            var application = await _repository.GetByStudentIdAsync(studentId, cancellationToken);
-            if (application == null || application.Count() == 0)
-            {
-                throw new NotFoundException("No applications found for the student.");
-            }
-            List<StudentApplicationDto> applicationDtos = application.Select(a => new StudentApplicationDto
-            {
-                Id = a.Id,
-                DriveId = a.DriveId,
-                AppliedOn = a.AppliedAt,
-                Status = a.Status.ToString()
-            }).ToList();
-            return applicationDtos;
+            if (studentId == Guid.Empty)
+                throw new ValidationException("Invalid student ID");
+
+            var applications = await _repository.GetByStudentIdAsync(studentId, cancellationToken);
+
+            if (!applications.Any())
+                return new List<StudentApplication>();
+
+            return applications
+                .Select(a => new StudentApplication(
+                    a.Id,
+                    a.DriveId,
+                    a.AppliedAt,
+                    a.Status.ToString()
+                ))
+                .ToList();
         }
 
-        // TODO: Update below api logic
-        public async Task<List<Application>> GetDriveApplications(Guid driveId, CancellationToken cancellationToken)
+        // ---------------- DRIVE APPLICATIONS ----------------
+        public async Task<List<ApplicationResponse>> GetDriveApplicationsAsync(
+            Guid driveId,
+            CancellationToken cancellationToken)
         {
-            return await _repository.GetByDriveIdAsync(driveId, cancellationToken);
+            if (driveId == Guid.Empty)
+                throw new ValidationException("Invalid drive ID");
+
+            var applications = await _repository.GetByDriveIdAsync(driveId, cancellationToken);
+
+            return applications
+                .Select(a => new ApplicationResponse(
+                    a.Id,
+                    a.DriveId,
+                    a.StudentUserId,
+                    a.AppliedAt,
+                    a.Status.ToString()
+                ))
+                .ToList();
         }
     }
 }

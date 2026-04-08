@@ -1,16 +1,22 @@
 using ApplicationService.DTO;
-using ApplicationService.Entities;
-using System.Threading;
+using static ApplicationService.DTO.Dtos;
 
 namespace ApplicationService.Services.Interfaces
 {
     public interface IApplicationService
     {
-        public Task ApplyAsync(ApplicationRequestDto application, CancellationToken cancellationToken);
-        public Task DeleteApplication(Guid applicationId, Guid studentId, CancellationToken cancellationToken);
-        public Task<List<UserApplicationsResponseDto>> GetUsersApplications(Guid studentId, CancellationToken cancellationToken);
-        public Task<List<Application>> GetDriveApplications(Guid driveId, CancellationToken cancellationToken);
-        public Task<List<StudentApplicationDto>> GetStudentApplication(Guid studentId, CancellationToken cancellationToken);
-        // public Task<Application> GetApplication(Guid applicationId, CancellationToken cancellationToke
+        // ---------------- COMMANDS ----------------
+
+        Task ApplyAsync(CreateApplicationRequest request, CancellationToken cancellationToken);
+
+        Task DeleteApplicationAsync(Guid applicationId, Guid studentId, CancellationToken cancellationToken);
+
+        // ---------------- QUERIES ----------------
+
+        Task<List<UserApplicationSummary>> GetUserApplicationsAsync(Guid studentId, CancellationToken cancellationToken);
+
+        Task<List<ApplicationResponse>> GetDriveApplicationsAsync(Guid driveId, CancellationToken cancellationToken);
+
+        Task<List<StudentApplication>> GetStudentApplicationsAsync(Guid studentId, CancellationToken cancellationToken);
     }
 }

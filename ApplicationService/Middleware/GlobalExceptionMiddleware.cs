@@ -1,6 +1,6 @@
 using System.Net;
 using System.Text.Json;
-using ApplicationService.Exceptions;
+using static ApplicationService.DTO.Dtos;
 
 namespace ApplicationService.Middleware
 {
@@ -9,9 +9,7 @@ namespace ApplicationService.Middleware
         private readonly RequestDelegate _next;
         private readonly ILogger<GlobalExceptionMiddleware> _logger;
 
-        public GlobalExceptionMiddleware(
-            RequestDelegate next,
-            ILogger<GlobalExceptionMiddleware> logger)
+        public GlobalExceptionMiddleware(RequestDelegate next, ILogger<GlobalExceptionMiddleware> logger)
         {
             _next = next;
             _logger = logger;
@@ -25,67 +23,66 @@ namespace ApplicationService.Middleware
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Unhandled exception: {Message}", ex.Message);
                 await HandleExceptionAsync(context, ex);
             }
         }
 
         private async Task HandleExceptionAsync(HttpContext context, Exception exception)
         {
-            var statusCode = GetStatusCode(exception);
+            context.Response.ContentType = "application/json";
 
-            var response = new ErrorResponse
+            var (statusCode, message) = exception switch
             {
-                StatusCode = statusCode,
-                Message = exception.Message,
-                Path = context.Request.Path,
-                Method = context.Request.Method,
-                TraceId = context.TraceIdentifier,
-                Timestamp = DateTime.UtcNow
+                NotFoundException ex => (HttpStatusCode.NotFound, ex.Message),
+                ConflictException ex => (HttpStatusCode.Conflict, ex.Message),
+                ForbiddenException ex => (HttpStatusCode.Forbidden, ex.Message),
+                UnauthorizedException ex => (HttpStatusCode.Unauthorized, ex.Message),
+                ValidationException ex => (HttpStatusCode.BadRequest, ex.Message),
+                BadRequestException ex => (HttpStatusCode.BadRequest, ex.Message),
+                _ => (HttpStatusCode.InternalServerError, "An unexpected error occurred.")
             };
 
-            context.Response.ContentType = "application/json";
-            context.Response.StatusCode = statusCode;
+            context.Response.StatusCode = (int)statusCode;
 
-            // Logging strategy
-            if (statusCode >= 500)
+            var response = new ApiErrorResponse(false, message);
+            var json = JsonSerializer.Serialize(response, new JsonSerializerOptions
             {
-                _logger.LogError(exception,
-                    "Unhandled exception. StatusCode: {StatusCode}, TraceId: {TraceId}",
-                    statusCode, context.TraceIdentifier);
-            }
-            else
-            {
-                _logger.LogWarning(exception,
-                    "Handled exception. StatusCode: {StatusCode}, TraceId: {TraceId}",
-                    statusCode, context.TraceIdentifier);
-            }
-
-            var json = JsonSerializer.Serialize(response,
-                new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase });
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
 
             await context.Response.WriteAsync(json);
         }
-
-        private static int GetStatusCode(Exception exception)
-        {
-            return exception switch
-            {
-                ValidationException => (int)HttpStatusCode.BadRequest,        // 400
-                NotFoundException => (int)HttpStatusCode.NotFound,           // 404
-                ConflictException => (int)HttpStatusCode.Conflict,           // 409
-                UnauthorizedAccessException => (int)HttpStatusCode.Forbidden,// 403
-                _ => (int)HttpStatusCode.InternalServerError                 // 500
-            };
-        }
     }
 
-    public class ErrorResponse
+    // Domain exceptions
+    public class NotFoundException : Exception
     {
-        public int StatusCode { get; set; }
-        public string Message { get; set; } = string.Empty;
-        public string Path { get; set; } = string.Empty;
-        public string Method { get; set; } = string.Empty;
-        public string TraceId { get; set; } = string.Empty;
-        public DateTime Timestamp { get; set; }
+        public NotFoundException(string message) : base(message) { }
+    }
+
+    public class ConflictException : Exception
+    {
+        public ConflictException(string message) : base(message) { }
+    }
+
+    public class ForbiddenException : Exception
+    {
+        public ForbiddenException(string message) : base(message) { }
+    }
+
+    public class UnauthorizedException : Exception
+    {
+        public UnauthorizedException(string message) : base(message) { }
+    }
+
+    public class ValidationException : Exception
+    {
+        public ValidationException(string message) : base(message) { }
+    }
+
+    public class BadRequestException : Exception
+    {
+        public BadRequestException(string message) : base(message) { }
     }
 }

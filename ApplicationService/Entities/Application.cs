@@ -1,4 +1,5 @@
 ﻿using ApplicationService.Constants;
+using ApplicationService.Middleware;
 
 namespace ApplicationService.Entities
 {
@@ -12,8 +13,8 @@ namespace ApplicationService.Entities
 
         public static Application Create(Guid studentId, Guid driveId)
         {
-            if (studentId == Guid.Empty) throw new ArgumentNullException("StudentId is required");
-            if (driveId == Guid.Empty) throw new ArgumentNullException("DriveId is required");
+            if (studentId == Guid.Empty) throw new ValidationException("StudentId is Required");
+            if (driveId == Guid.Empty) throw new ValidationException("DriveId is required");
 
             return new Application
             {

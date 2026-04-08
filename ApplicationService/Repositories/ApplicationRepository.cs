@@ -42,5 +42,11 @@ namespace ApplicationService.Repositories
         {
             return await _context.Applications.FindAsync(new object[] {applicationId}, cancellationToken);
         }
+
+        public async Task<bool> ExistsAsync(Guid studentId, Guid driveId, CancellationToken cancellationToken)
+        {
+            return await _context.Applications
+                .AnyAsync(a => a.StudentUserId == studentId && a.DriveId == driveId, cancellationToken);
+        }
     }
 }

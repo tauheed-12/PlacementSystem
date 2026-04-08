@@ -9,5 +9,7 @@ namespace PlacementDriveService.Repositries.Interfaces
         Task DeleteAsync(PlacementDrive drive);
         Task SaveChangesAsync();
         IQueryable<PlacementDrive> GetOpenDrives();
+        Task AddOutboxMessageAsync(OutboxMessage message);
+        Task<List<OutboxMessage>> GetUnProcessedOutboxMessagesAsync(int batchSize = 50);
     }
 }

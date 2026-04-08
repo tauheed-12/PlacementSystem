@@ -1,9 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using PlacementDriveService.Entities;
+using System.Text.Json;
 
 namespace PlacementDriveService.Data
 {
@@ -13,15 +11,48 @@ namespace PlacementDriveService.Data
         {
         }
 
-        public DbSet<Entities.PlacementDrive> PlacementDrives { get; set; } = null!;
+        public DbSet<PlacementDrive> PlacementDrives { get; set; } = null!;
+        public DbSet<OutboxMessage> OutboxMessages { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
-            // Store List<string> AllowedBranches as JSON in a single column
-            modelBuilder.Entity<Entities.PlacementDrive>(b =>
+            modelBuilder.Entity<PlacementDrive>(b =>
             {
+                b.HasKey(p => p.Id);
+
+                b.Property(p => p.CompanyName)
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                b.Property(p => p.JobRole)
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                b.Property(p => p.Description)
+                    .HasMaxLength(1000);
+
+                b.Property(p => p.Package)
+                    .IsRequired()
+                    .HasPrecision(10, 2); 
+
+                b.Property(p => p.DriveDate)
+                    .IsRequired();
+
+                b.Property(p => p.ApplicationDeadline)
+                    .IsRequired();
+
+                b.Property(p => p.CreatedBy)
+                    .IsRequired();
+
+                b.Property(p => p.CreatedAt)
+                    .IsRequired()
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                b.Property(p => p.Status)
+                    .IsRequired();
+
                 b.Property(p => p.AllowedBranches)
                  .HasConversion(
                     v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
@@ -33,8 +64,44 @@ namespace PlacementDriveService.Data
                     c => c.ToList()
                  ));
 
-                // Optional: set a column type/length if desired, e.g. nvarchar(max)
-                b.Property(p => p.AllowedBranches).HasColumnType("nvarchar(max)");
+                b.HasIndex(p => p.CompanyName);
+                b.HasIndex(p => p.DriveDate);
+                b.HasIndex(p => p.Status);
+            });
+
+            modelBuilder.Entity<OutboxMessage>(entity =>
+            {
+                entity.HasKey(om => om.Id);
+
+                entity.Property(om => om.EventType)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(om => om.Key)
+                    .IsRequired()
+                    .HasMaxLength(256);
+
+                entity.Property(om => om.Payload)
+                    .IsRequired()
+                    .HasColumnType("nvarchar(max)");  
+
+                entity.Property(om => om.IsProcessed)
+                    .IsRequired()
+                    .HasDefaultValue(false);
+
+                entity.Property(om => om.CreatedAt)
+                    .IsRequired()
+                    .HasDefaultValueSql("GETUTCDATE()");
+
+                entity.Property(om => om.ProcessedAt)
+                    .IsRequired(false);
+
+
+                entity.ToTable(t => t.HasCheckConstraint(
+                    "CK_OutboxMessage_ProcessedAt",
+                    "[IsProcessed] = 0 OR [ProcessedAt] IS NOT NULL");
+
+                entity.HasIndex(om => new { om.IsProcessed, om.CreatedAt });
             });
         }
     }
