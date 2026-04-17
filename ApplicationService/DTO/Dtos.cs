@@ -1,5 +1,4 @@
-﻿using ApplicationService.Enums;
-using static ApplicationService.Enums.Enums;
+using ApplicationService.Enums;
 
 namespace ApplicationService.DTO
 {
@@ -22,13 +21,13 @@ namespace ApplicationService.DTO
             Guid DriveId,
             Guid StudentId,
             DateTime AppliedAt,
-            ApplicationStatus Status
+            string Status
         );
 
         public record UserApplicationSummary(
             Guid ApplicationId,
             string CompanyName,
-            ApplicationStatus Status,
+            string Status,
             DateTime AppliedAt,
             DateTime DriveDate
         );
@@ -42,14 +41,14 @@ namespace ApplicationService.DTO
             List<string> AllowedBranches,
             DateTime DriveDate,
             DateTime ApplicationDeadline,
-            ApplicationStatus Status
+            string Status
         );
 
         public record StudentApplication(
             Guid Id,
             Guid DriveId,
             DateTime AppliedAt,
-            ApplicationStatus Status
+            string Status
         );
 
         public record ApiResponse<T>(bool Success, string? Message, T? Data);

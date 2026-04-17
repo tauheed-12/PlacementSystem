@@ -1,11 +1,11 @@
-﻿namespace PlacementDriveService.Constants
+namespace PlacementDriveService.Enums
 {
     public static class Roles
     {
         public const string Student = "Student";
+        public const string Admin = "Admin";
+        public const string Recruiter = "Recruiter";
         public const string PlacementCoordinator = "PlacementCoordinator";
         public const string TPO = "TPO";
-        public const string Recruiter = "Recruiter";
-        public const string Admin = "Admin";
     }
 }

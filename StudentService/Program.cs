@@ -6,7 +6,9 @@ using StudentService.Repositories.Interfaces;
 using StudentService.Middleware;
 using StudentService.Services.Interfaces;
 using StudentService.Services;
-using StudentService.Infrastructure;
+using Common.Contracts.Infrastructure;
+using StudentService.Validators;
+using FluentValidation;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,6 +40,11 @@ builder.Services.AddDbContext<StudentDbContext>(options =>
 // Controllers
 // ----------------------------------------------------
 builder.Services.AddControllers();
+
+// Register all validators automatically
+builder.Services.AddValidatorsFromAssemblyContaining<CreateStudentProfileValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<UpdateStudentProfileValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<BulkUserIdsValidator>();
 
 // ----------------------------------------------------
 // HTTP Context Accessor

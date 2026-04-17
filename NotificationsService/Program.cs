@@ -3,10 +3,16 @@ using Microsoft.OpenApi.Models;
 using NotificationsService.Clients;
 using NotificationsService.Clients.Interfaces;
 using NotificationsService.Consumers;
+using Common.Contracts.Configuration;
+using Common.Contracts.Infrastructure;
 using NotificationsService.Data;
 using NotificationsService.Middleware;
 using NotificationsService.Repositories;
 using NotificationsService.Repositories.Interfaces;
+using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Extensions.Http;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +35,7 @@ builder.Services.AddControllers();
 // forwarded by the API Gateway
 // -------------------------------------------------------
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<RequestContextAccessor>();
 
 // -------------------------------------------------------
 // Swagger
@@ -90,15 +97,20 @@ builder.Services.AddSingleton<IEmailClient, EmailClient>();
 // -------------------------------------------------------
 // HTTP Clients
 // -------------------------------------------------------
-builder.Services.AddHttpClient<IStudentServiceClient, StudentServiceClient>(client =>
+builder.Services.AddOptions<ServiceEndpointOptions>("StudentService")
+    .Bind(builder.Configuration.GetSection("Services:StudentService"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddHttpClient<IStudentServiceClient, StudentServiceClient>((sp, client) =>
 {
-    var baseUrl = builder.Configuration["Services:StudentService:BaseUrl"]
-        ?? throw new InvalidOperationException(
-            "Configuration error: 'Services:StudentService:BaseUrl' is missing.");
+    var studentServiceOptions = sp.GetRequiredService<IOptionsMonitor<ServiceEndpointOptions>>().Get("StudentService");
+    var baseUrl = studentServiceOptions.BaseUrl;
 
     client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(10);
-});
+})
+.AddPolicyHandler(GetRetryPolicy());
 
 // -------------------------------------------------------
 // Repositories
@@ -141,3 +153,13 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => msg.StatusCode == HttpStatusCode.TooManyRequests)
+        .WaitAndRetryAsync(
+            retryCount: 3,
+            sleepDurationProvider: retryAttempt => TimeSpan.FromMilliseconds(200 * retryAttempt));
+}

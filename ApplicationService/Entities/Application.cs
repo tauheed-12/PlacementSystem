@@ -1,4 +1,4 @@
-﻿using ApplicationService.Constants;
+﻿using ApplicationService.Enums;
 using ApplicationService.Middleware;
 
 namespace ApplicationService.Entities
@@ -8,7 +8,7 @@ namespace ApplicationService.Entities
         public Guid Id { get; private set; }
         public Guid StudentUserId { get; private set; }
         public Guid DriveId { get;private set; }
-        public string Status { get; private set; } = ApplicationStatus.Applied;
+        public ApplicationStatus Status { get; private set; } = ApplicationStatus.Applied;
         public DateTime AppliedAt { get; private set; } = DateTime.Now;
 
         public static Application Create(Guid studentId, Guid driveId)

@@ -4,7 +4,7 @@ using ApplicationService.Services.Interfaces;
 using ApplicationService.Entities;
 using ApplicationService.HttpClients.Interfaces;
 using static ApplicationService.DTO.Dtos;
-using ApplicationService.Middleware;
+using Common.Contracts.Web;
 
 namespace ApplicationService.Services
 {
@@ -117,7 +117,7 @@ namespace ApplicationService.Services
                     return new UserApplicationSummary(
                         a.Id,
                         drive.CompanyName,
-                        a.Status.ToString(),
+                        a.Status,
                         a.AppliedAt,
                         drive.DriveDate
                     );
@@ -143,7 +143,7 @@ namespace ApplicationService.Services
                     a.Id,
                     a.DriveId,
                     a.AppliedAt,
-                    a.Status.ToString()
+                    a.Status
                 ))
                 .ToList();
         }
@@ -164,7 +164,7 @@ namespace ApplicationService.Services
                     a.DriveId,
                     a.StudentUserId,
                     a.AppliedAt,
-                    a.Status.ToString()
+                    a.Status
                 ))
                 .ToList();
         }

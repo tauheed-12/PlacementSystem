@@ -4,6 +4,7 @@ using PlacementDriveService.Data;
 using PlacementDriveService.Middleware;
 using PlacementDriveService.Repositries;
 using PlacementDriveService.Repositries.Interfaces;
+using Common.Contracts.Infrastructure;
 using PlacementDriveService.Services;
 using PlacementDriveService.Services.Interfaces;
 
@@ -51,6 +52,7 @@ builder.Services.AddControllers();
 // forwarded by the API Gateway
 // ----------------------------------------------------
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<RequestContextAccessor>();
 
 // ----------------------------------------------------
 // Application Services & Repositories
@@ -136,8 +138,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
-app.UseMiddleware<PlacementDriveService.Middleware.GlobalExceptionMiddleware>();
 
 app.UseHttpsRedirection();
 app.UseGlobalExceptionMiddleware();

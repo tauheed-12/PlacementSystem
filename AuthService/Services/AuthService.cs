@@ -2,7 +2,7 @@
 using AuthService.Entities;
 using AuthService.Enums;
 using AuthService.Helpers;
-using AuthService.Middleware;
+using Common.Contracts.Web;
 using AuthService.Repositories.Interfaces;
 using AuthService.Services.Interfaces;
 using System.Security.Cryptography;

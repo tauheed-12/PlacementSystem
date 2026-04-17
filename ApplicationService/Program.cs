@@ -1,10 +1,16 @@
 using ApplicationService.Data;
 using ApplicationService.HttpClients;
 using ApplicationService.HttpClients.Interfaces;
+using Common.Contracts.Infrastructure;
 using ApplicationService.Repositories;
 using ApplicationService.Repositories.Interfaces;
+using Common.Contracts.Configuration;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Polly;
+using Polly.Extensions.Http;
 using Microsoft.OpenApi.Models;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,17 +41,19 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // -------------------------------------------------------
 // External HTTP Clients
 // -------------------------------------------------------
-var placementDriveBaseUrl =
-    builder.Configuration["Services:PlacementDriveService:BaseUrl"]
-    ?? throw new InvalidOperationException(
-        "Configuration error: 'Services:PlacementDriveService:BaseUrl' is missing."
-    );
+builder.Services.AddOptions<ServiceEndpointOptions>("PlacementDriveService")
+    .Bind(builder.Configuration.GetSection("Services:PlacementDriveService"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
-builder.Services.AddHttpClient<IPlacementDriveServiceClient>(client =>
+builder.Services.AddHttpClient<IPlacementDriveServiceClient>((sp, client) =>
 {
+    var placementDriveOptions = sp.GetRequiredService<IOptionsMonitor<ServiceEndpointOptions>>().Get("PlacementDriveService");
+    var placementDriveBaseUrl = placementDriveOptions.BaseUrl;
     client.BaseAddress = new Uri(placementDriveBaseUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(10);
-});
+})
+.AddPolicyHandler(GetRetryPolicy());
 
 // -------------------------------------------------------
 // HTTP Context Accessor
@@ -53,6 +61,7 @@ builder.Services.AddHttpClient<IPlacementDriveServiceClient>(client =>
 // forwarded by the API Gateway
 // -------------------------------------------------------
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<RequestContextAccessor>();
 
 // -------------------------------------------------------
 // Application Services & Repositories
@@ -77,7 +86,7 @@ builder.Services.AddHealthChecks()
 
 // -------------------------------------------------------
 // Swagger
-// No JWT security definition needed ó auth is handled
+// No JWT security definition needed ù auth is handled
 // at the API Gateway, not here
 // -------------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
@@ -89,7 +98,7 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1"
     });
 
-    // Optional ó only if you want to manually pass headers in Swagger during dev testing
+    // Optional ù only if you want to manually pass headers in Swagger during dev testing
     options.AddSecurityDefinition("GatewayHeaders", new OpenApiSecurityScheme
     {
         Name = "X-User-Id",
@@ -123,3 +132,13 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .OrResult(msg => msg.StatusCode == HttpStatusCode.TooManyRequests)
+        .WaitAndRetryAsync(
+            retryCount: 3,
+            sleepDurationProvider: retryAttempt => TimeSpan.FromMilliseconds(200 * retryAttempt));
+}

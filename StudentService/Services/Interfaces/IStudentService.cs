@@ -1,18 +1,16 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using StudentService.DTOs;
-using StudentService.Entities;
+﻿using StudentService.DTOs;
 
 namespace StudentService.Services.Interfaces
 {
     public interface IStudentService
     {
-        Task CreateProfileAsync(Guid userId, Dtos.CreateStudentProfileRequest request);
-        Task<Dtos.StudentProfileResponse> GetProfileAsync(Guid userId);
-        Task UpdateProfileAsync(Guid userId, Dtos.UpdateStudentProfileRequest dto);
-        Task DeleteProfileAsync(Guid studentId);
-        Task<List<Dtos.StudentProfileResponse>> GetAllProfilesAsync();
-        Task<List<Dtos.StudentProfileResponse>> GetProfilesInBulkAsync(List<Guid> userIds);
-        Task<Dtos.ProfileCompletionResponse> GetProfileCompletionStatusAsync(Guid userId);
-        Task<Dtos.StudentProfileShortResponse> GetProfileByIdAsync(Guid studentId);
+        Task CreateProfileAsync(Guid userId, Dtos.CreateStudentProfileRequest request, CancellationToken cancellationToken);
+        Task<Dtos.StudentProfileResponse> GetProfileAsync(Guid userId, CancellationToken cancellationToken);
+        Task UpdateProfileAsync(Guid userId, Dtos.UpdateStudentProfileRequest dto, CancellationToken cancellationToken);
+        Task DeleteProfileAsync(Guid userId, CancellationToken cancellationToken);
+        Task<List<Dtos.StudentProfileResponse>> GetAllProfilesAsync(CancellationToken cancellationToken);
+        Task<List<Dtos.StudentProfileResponse>> GetProfilesInBulkAsync(List<Guid> userIds, CancellationToken cancellationToken);
+        Task<Dtos.ProfileCompletionResponse> GetProfileCompletionStatusAsync(Guid userId, CancellationToken cancellationToken);
+        Task<Dtos.StudentProfileShortResponse> GetProfileByIdAsync(Guid userId, CancellationToken cancellationToken);
     }
 }

@@ -1,4 +1,4 @@
-﻿using AuthService.Entities;
+using AuthService.Entities;
 using AuthService.Enums;
 
 namespace AuthService.Repositories.Interfaces
@@ -19,6 +19,6 @@ namespace AuthService.Repositories.Interfaces
         void RevokeUserToken(UserToken token);
         void RevokeRefreshToken(RefreshToken token);
         Task<UserToken?> GetValidUserTokenByUserIdAsync(Guid userId, UserTokenType type);
-        Task<List<OutboxMessage>> GetUnProcessedOutboxMessagesAsync();
+        Task<List<OutboxMessage>> GetUnProcessedOutboxMessagesAsync(int batchSize = 50);
     }
 }

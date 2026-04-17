@@ -1,201 +1,127 @@
-// StudentsController.cs
-using Microsoft.AspNetCore.Authorization;
+using Common.Contracts.Web;
+using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using StudentService.Constants;
-using StudentService.Infrastructure;
+using Common.Contracts.Infrastructure;
 using StudentService.Services.Interfaces;
 using static StudentService.DTOs.Dtos;
 
 namespace StudentService.Controllers
 {
     [ApiController]
-    [Authorize]
-    [Route("api/students")]  
+    [Route("api/students")]
     public class StudentsController : ControllerBase
     {
         private readonly IStudentService _service;
-        private readonly RequestContextAccessor _requestContextAccessor;
-        private readonly ILogger<StudentsController> _logger;
+        private readonly RequestContextAccessor _contextAccessor;
 
-        public StudentsController(
-            IStudentService service,
-            RequestContextAccessor requestContextAccessor,
-            ILogger<StudentsController> logger)
+        public StudentsController(IStudentService service, RequestContextAccessor contextAccessor)
         {
             _service = service;
-            _requestContextAccessor = requestContextAccessor;
-            _logger = logger;
+            _contextAccessor = contextAccessor;
         }
 
+
+        private async Task<IActionResult?> ValidateAsync<T>(T model, IValidator<T> validator, CancellationToken ct)
+        {
+            var result = await validator.ValidateAsync(model, ct);
+            if (!result.IsValid)
+                return BadRequest(ApiEnvelope<object>.Fail(
+                    "Validation failed",
+                    result.Errors.Select(e => e.ErrorMessage)));
+
+            return null;
+        }
+
+    
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] CreateStudentProfileRequest request)
+        public async Task<IActionResult> Create( [FromBody] CreateStudentProfileRequest dto, [FromServices] IValidator<CreateStudentProfileRequest> validator, CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
-            if (!context.IsInRole(Roles.Student))
-                return Forbid();
+            var error = await ValidateAsync(dto, validator, ct);
+            if (error != null) return error;
 
-            try
-            {
-                await _service.CreateProfileAsync(context.UserId, request);
-                return Created(string.Empty, null);
-            }
-            catch (InvalidOperationException ex)
-            {
-                return Conflict(new { error = ex.Message });
-            }
-            catch (DbUpdateException ex)
-                when (ex.InnerException?.Message.Contains("UQ_") == true
-                   || ex.InnerException?.Message.Contains("unique") == true)
-            {
-                _logger.LogWarning(ex, "Duplicate profile creation attempt for user {UserId}", context.UserId);
-                return Conflict(new { error = "A profile already exists for this account." });
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error creating profile for user {UserId}", context.UserId);
-                return StatusCode(500, new { error = "Failed to create profile. Please try again." });
-            }
+            var context = _contextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student)) return Forbid();
+
+            await _service.CreateProfileAsync(context.UserId, dto, ct);
+            return Created(string.Empty, ApiEnvelope<object>.Ok("Profile created successfully"));
         }
 
-        [HttpGet("me")]  
-        public async Task<IActionResult> Get()
+       
+        [HttpGet("me")]
+        public async Task<IActionResult> Get(CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
-            if (!context.IsInRole(Roles.Student))
-                return Forbid();
+            var context = _contextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student)) return Forbid();
 
-            try
-            {
-                var profile = await _service.GetProfileAsync(context.UserId);
-                return Ok(profile);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { error = ex.Message });
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error fetching profile for user {UserId}", context.UserId);
-                return StatusCode(500, new { error = "Failed to retrieve profile. Please try again." });
-            }
+            var result = await _service.GetProfileAsync(context.UserId, ct);
+            return Ok(ApiEnvelope<object>.Ok("Profile fetched successfully", result));
         }
 
+        
         [HttpGet("{studentId:guid}")]
-        public async Task<IActionResult> GetById(Guid studentId)
+        public async Task<IActionResult> GetById(Guid studentId, CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
+            var context = _contextAccessor.GetContext();
             if (!context.HasAnyRole(Roles.Admin, Roles.TPO, Roles.PlacementCoordinator, Roles.Recruiter))
                 return Forbid();
 
-            try
-            {
-                var profile = await _service.GetProfileByIdAsync(studentId);
-                return Ok(profile);
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { error = ex.Message });
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error fetching profile {StudentId}", studentId);
-                return StatusCode(500, new { error = "Failed to retrieve profile. Please try again." });
-            }
+            var result = await _service.GetProfileByIdAsync(studentId, ct);
+            return Ok(ApiEnvelope<object>.Ok("Profile fetched successfully", result));
         }
 
+        
         [HttpPatch("me")]
-        public async Task<IActionResult> Update([FromBody] UpdateStudentProfileRequest dto)
+        public async Task<IActionResult> Update( [FromBody] UpdateStudentProfileRequest dto, [FromServices] IValidator<UpdateStudentProfileRequest> validator, CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
-            if (!context.IsInRole(Roles.Student))
-                return Forbid();
+            var error = await ValidateAsync(dto, validator, ct);
+            if (error != null) return error;
 
-            try
-            {
-                await _service.UpdateProfileAsync(context.UserId, dto);
-                return NoContent();
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { error = ex.Message });
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error updating profile for user {UserId}", context.UserId);
-                return StatusCode(500, new { error = "Failed to update profile. Please try again." });
-            }
+            var context = _contextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student)) return Forbid();
+
+            await _service.UpdateProfileAsync(context.UserId, dto, ct);
+            return Ok(ApiEnvelope<object>.Ok("Profile updated successfully"));
         }
 
+        
         [HttpPost("bulk-profiles")]
-        public async Task<IActionResult> Bulk([FromBody] List<Guid> userIds)
+        public async Task<IActionResult> Bulk( [FromBody] List<Guid> userIds, [FromServices] IValidator<List<Guid>> validator, CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
+            var error = await ValidateAsync(userIds, validator, ct);
+            if (error != null) return error;
+
+            var context = _contextAccessor.GetContext();
             if (!context.HasAnyRole(Roles.Admin, Roles.TPO, Roles.PlacementCoordinator, Roles.Recruiter))
                 return Forbid();
 
-            if (userIds == null || userIds.Count == 0)
-                return Ok(new List<object>());
-
-            if (userIds.Count > 100)
-                return BadRequest(new { error = "Maximum 100 user IDs per request." });
-
-            try
-            {
-                var profiles = await _service.GetProfilesInBulkAsync(userIds);
-                return Ok(profiles);
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error during bulk profile fetch");
-                return StatusCode(500, new { error = "Failed to retrieve profiles. Please try again." });
-            }
+            var result = await _service.GetProfilesInBulkAsync(userIds, ct);
+            return Ok(ApiEnvelope<object>.Ok("Profiles fetched successfully", result));
         }
 
+        
         [HttpDelete("{studentId:guid}")]
-        public async Task<IActionResult> Delete(Guid studentId)
+        public async Task<IActionResult> Delete(Guid studentId, CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
+            var context = _contextAccessor.GetContext();
             if (!context.HasAnyRole(Roles.Admin, Roles.TPO, Roles.PlacementCoordinator))
                 return Forbid();
 
-            try
-            {
-                await _service.DeleteProfileAsync(studentId);
-                return NoContent();
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { error = ex.Message });
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error deleting profile {StudentId}", studentId);
-                return StatusCode(500, new { error = "Failed to delete profile. Please try again." });
-            }
+            await _service.DeleteProfileAsync(studentId, ct);
+            return Ok(ApiEnvelope<object>.Ok("Profile deleted successfully"));
         }
 
+        
         [HttpGet("me/profile-progress")]
-        public async Task<IActionResult> GetProfileProgress()
+        public async Task<IActionResult> GetProfileProgress(CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
-            if (!context.IsInRole(Roles.Student))
-                return Forbid();
+            var context = _contextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student)) return Forbid();
 
-            try
-            {
-                var progress = await _service.GetProfileCompletionStatusAsync(context.UserId);
-                return Ok(new { profileProgress = progress });
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { error = ex.Message });
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error fetching profile progress for user {UserId}", context.UserId);
-                return StatusCode(500, new { error = "Failed to retrieve profile progress. Please try again." });
-            }
+            var result = await _service.GetProfileCompletionStatusAsync(context.UserId, ct);
+            return Ok(ApiEnvelope<object>.Ok(
+                "Profile progress fetched successfully",
+                new { profileProgress = result }));
         }
     }
 }

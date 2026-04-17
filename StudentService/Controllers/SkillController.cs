@@ -1,107 +1,70 @@
-﻿// SkillController.cs
-using Microsoft.AspNetCore.Authorization;
+using Common.Contracts.Web;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using StudentService.Constants;
-using StudentService.Infrastructure;
+using Common.Contracts.Infrastructure;
 using StudentService.Services.Interfaces;
-using System.ComponentModel.DataAnnotations;
+using FluentValidation;
+using static StudentService.DTOs.Dtos;
 
 namespace StudentService.Controllers
 {
     [ApiController]
-    [Authorize]
     [Route("api/students/skills")]
     public class SkillController : ControllerBase
     {
         private readonly ISkillService _service;
-        private readonly RequestContextAccessor _requestContextAccessor;
-        private readonly ILogger<SkillController> _logger;
+        private readonly RequestContextAccessor _contextAccessor;
 
-        public SkillController(
-            ISkillService service,
-            RequestContextAccessor requestContextAccessor,
-            ILogger<SkillController> logger)
+        public SkillController(ISkillService service, RequestContextAccessor contextAccessor)
         {
             _service = service;
-            _requestContextAccessor = requestContextAccessor;
-            _logger = logger;
+            _contextAccessor = contextAccessor;
         }
 
-        public class AddSkillRequest
+        private async Task<IActionResult?> ValidateAsync<T>(T model, IValidator<T> validator, CancellationToken ct)
         {
-            [Required]
-            [MinLength(1)]
-            [MaxLength(100)]
-            public string SkillName { get; set; } = null!;
+            var result = await validator.ValidateAsync(model, ct);
+            if (!result.IsValid)
+                return BadRequest(ApiEnvelope<object>.Fail(
+                    "Validation failed",
+                    result.Errors.Select(e => e.ErrorMessage)));
+
+            return null;
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddSkill([FromBody] AddSkillRequest request)
+        public async Task<IActionResult> AddSkill([FromBody] AddSkillRequest dto, [FromServices] IValidator<AddSkillRequest> validator, CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
-            if (!context.IsInRole(Roles.Student))
-                return Forbid();
+            var context = _contextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student)) return Forbid();
 
-            try
-            {
-                await _service.AddSkillAsync(context.UserId, request.SkillName);
-                return Ok();
-            }
-            catch (DbUpdateException ex)
-                when (ex.InnerException?.Message.Contains("UQ_") == true
-                   || ex.InnerException?.Message.Contains("unique") == true)
-            {
-                _logger.LogWarning("Duplicate skill '{Skill}' for user {UserId}", request.SkillName, context.UserId);
-                return Conflict(new { error = $"Skill '{request.SkillName}' already exists." });
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error adding skill for user {UserId}", context.UserId);
-                return StatusCode(500, new { error = "Failed to save skill. Please try again." });
-            }
+            var validationResult = await ValidateAsync(dto, validator, ct);
+            if (validationResult != null) return validationResult;
+
+            await _service.AddSkillAsync(context.UserId, dto, ct);
+            return Ok(ApiEnvelope<object>.Ok("Skill added successfully"));
         }
 
+        
         [HttpDelete("{skillId:guid}")]
-        public async Task<IActionResult> RemoveSkill(Guid skillId)
+        public async Task<IActionResult> RemoveSkill(Guid skillId, CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
-            if (!context.IsInRole(Roles.Student))
-                return Forbid();
+            var context = _contextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student)) return Forbid();
 
-            try
-            {
-                await _service.RemoveSkillAsync(context.UserId, skillId);
-                return NoContent(); 
-            }
-            catch (KeyNotFoundException ex)
-            {
-                return NotFound(new { error = ex.Message });
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error removing skill {SkillId} for user {UserId}", skillId, context.UserId);
-                return StatusCode(500, new { error = "Failed to remove skill. Please try again." });
-            }
+            await _service.RemoveSkillAsync(context.UserId, skillId, ct);
+            return Ok(ApiEnvelope<object>.Ok("Skill removed successfully"));
         }
 
+        
         [HttpGet]
-        public async Task<IActionResult> GetSkills()
+        public async Task<IActionResult> GetSkills(CancellationToken ct)
         {
-            var context = _requestContextAccessor.GetContext();
-            if (!context.IsInRole(Roles.Student))
-                return Forbid();
+            var context = _contextAccessor.GetContext();
+            if (!context.IsInRole(Roles.Student)) return Forbid();
 
-            try
-            {
-                var skills = await _service.GetSkillsAsync(context.UserId);
-                return Ok(skills);
-            }
-            catch (DbUpdateException ex)
-            {
-                _logger.LogError(ex, "DB error fetching skills for user {UserId}", context.UserId);
-                return StatusCode(500, new { error = "Failed to retrieve skills. Please try again." });
-            }
+            var result = await _service.GetSkillsAsync(context.UserId, ct);
+            return Ok(ApiEnvelope<object>.Ok("Skills fetched successfully", result));
         }
     }
 }

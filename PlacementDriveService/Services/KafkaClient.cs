@@ -1,9 +1,5 @@
 ﻿using System;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using Microsoft.Extensions.Configuration;
 using Confluent.Kafka;
 using PlacementDriveService.Services.Interfaces;
 

@@ -59,7 +59,7 @@ namespace PlacementDriveService.Data
                     v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>()
                  )
                  .Metadata.SetValueComparer(new ValueComparer<List<string>>(
-                    (c1, c2) => c1.SequenceEqual(c2),
+                    (c1, c2) => (c1 ?? new List<string>()).SequenceEqual(c2 ?? new List<string>()),
                     c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v != null ? v.GetHashCode() : 0)),
                     c => c.ToList()
                  ));
@@ -99,7 +99,7 @@ namespace PlacementDriveService.Data
 
                 entity.ToTable(t => t.HasCheckConstraint(
                     "CK_OutboxMessage_ProcessedAt",
-                    "[IsProcessed] = 0 OR [ProcessedAt] IS NOT NULL");
+                    "[IsProcessed] = 0 OR [ProcessedAt] IS NOT NULL"));
 
                 entity.HasIndex(om => new { om.IsProcessed, om.CreatedAt });
             });

@@ -16,15 +16,8 @@ public class NotificationIntentRepo : INotificationIntentRepo
 
     public async Task AddAsync(NotificationIntent intent)
     {
-        if (intent == null)
-        {
-            _logger.LogError("Attempted to add a null Notification Intent");
-            throw new ArgumentNullException(nameof(intent));
-        }
-
         await _context.NotificationIntents.AddAsync(intent);
         await _context.SaveChangesAsync();
-
         _logger.LogInformation("Notification Intent Created {intentId}", intent.IntentId);
     }
 

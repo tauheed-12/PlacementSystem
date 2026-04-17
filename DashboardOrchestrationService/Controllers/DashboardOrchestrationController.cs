@@ -1,5 +1,4 @@
 ﻿// Controllers/StudentDashboardController.cs
-using DashboardOrchestrationService.DTOs;
 using DashboardOrchestrationService.Infrastructure;
 using DashboardOrchestrationService.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -14,10 +13,7 @@ namespace DashboardOrchestrationService.Controllers
         private readonly ILogger<StudentDashboardController> _logger;
         private readonly RequestContextAccessor _requestContextAccessor;
 
-        public StudentDashboardController(
-            IStudentDashboardService dashboardService,
-            ILogger<StudentDashboardController> logger,
-            RequestContextAccessor requestContextAccessor)
+        public StudentDashboardController( IStudentDashboardService dashboardService, ILogger<StudentDashboardController> logger, RequestContextAccessor requestContextAccessor)
         {
             _dashboardService = dashboardService;
             _logger = logger;

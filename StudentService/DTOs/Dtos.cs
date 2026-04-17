@@ -65,6 +65,11 @@ namespace StudentService.DTOs
 
             List<string>? Skills);
 
+        public record AddSkillRequest(
+            [Required]
+            [MaxLength(100)]
+            string SkillName);
+
 
         // Response records don't need validation — they are outbound data
         public record StudentProfileResponse(

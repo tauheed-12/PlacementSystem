@@ -3,7 +3,7 @@ using PlacementDriveService.DTOs;
 using PlacementDriveService.Entities;
 using PlacementDriveService.Enums;
 using PlacementDriveService.Events;
-using PlacementDriveService.Exceptions;
+using Common.Contracts.Web;
 using PlacementDriveService.Repositries.Interfaces;
 using PlacementDriveService.Services.Interfaces;
 using System.Text.Json;
@@ -86,7 +86,7 @@ namespace PlacementDriveService.Services
                 CompanyName = request.CompanyName.Trim(),
                 JobRole = request.JobRole.Trim(),
                 Package = request.Package,
-                Description = request.Description?.Trim(),
+                Description = request.Description?.Trim() ?? string.Empty,
                 AllowedBranches = request.AllowedBranches,
                 DriveDate = request.DriveDate,
                 ApplicationDeadline = request.ApplicationDeadline,

@@ -4,10 +4,6 @@ using NotificationsService.Entites;
 using NotificationsService.Entities;
 using NotificationsService.Enums;
 using NotificationsService.Repositories.Interfaces;
-using Confluent.Kafka;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace NotificationsService.Consumers
 {

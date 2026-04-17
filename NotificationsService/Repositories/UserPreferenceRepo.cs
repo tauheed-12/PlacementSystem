@@ -18,9 +18,7 @@ namespace NotificationsService.Repositories
 
         public async Task<UserNotificationPreferences?> GetAsync(Guid userId)
         {
-            UserNotificationPreferences? preference =
-                await _notificationDbContext.UserNotificationPreferences.FindAsync(userId);
-
+            UserNotificationPreferences? preference = await _notificationDbContext.UserNotificationPreferences.FindAsync(userId);
             return preference;
         }
 

@@ -1,6 +1,5 @@
-﻿using StudentService.DTOs;
-using StudentService.Entities;
-using StudentService.Exceptions;
+﻿using StudentService.Entities;
+using Common.Contracts.Web;
 using StudentService.Repositories.Interfaces;
 using StudentService.Services.Interfaces;
 using static StudentService.DTOs.Dtos;
@@ -12,76 +11,16 @@ namespace StudentService.Services
         private readonly IStudentRepository _repo;
         private readonly ILogger<StudentService> _logger;
 
-        public StudentService(
-            IStudentRepository repo,
-            ILogger<StudentService> logger)
+        public StudentService(IStudentRepository repo, ILogger<StudentService> logger)
         {
             _repo = repo;
             _logger = logger;
         }
 
-        public async Task CreateProfileAsync(Guid userId, CreateStudentProfileRequest request)
+        public async Task CreateProfileAsync(Guid userId, CreateStudentProfileRequest request, CancellationToken cancellationToken)
         {
-            if (request == null)
-            {
-                _logger.LogError("Invalid create profile request for user {UserId}: request is null", userId);
-                throw new ValidationException("Invalid request");
-            }
-
-            // Required fields validation
-            if (string.IsNullOrWhiteSpace(request.RollNo))
-            {
-                _logger.LogError("CreateProfile validation failed for user {UserId}: RollNo is required", userId);
-                throw new ValidationException("Roll number is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.EnrollmentNo))
-            {
-                _logger.LogError("CreateProfile validation failed for user {UserId}: EnrollmentNo is required", userId);
-                throw new ValidationException("Enrollment number is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.FullName))
-            {
-                _logger.LogError("CreateProfile validation failed for user {UserId}: FullName is required", userId);
-                throw new ValidationException("Full name is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.PhoneNumber))
-            {
-                _logger.LogError("CreateProfile validation failed for user {UserId}: PhoneNumber is required", userId);
-                throw new ValidationException("Phone number is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.Course))
-            {
-                _logger.LogError("CreateProfile validation failed for user {UserId}: Course is required", userId);
-                throw new ValidationException("Course is required");
-            }
-
-            if (string.IsNullOrWhiteSpace(request.Branch))
-            {
-                _logger.LogError("CreateProfile validation failed for user {UserId}: Branch is required", userId);
-                throw new ValidationException("Branch is required");
-            }
-
-            if (request.Year < 1 || request.Year > 4)
-            {
-                _logger.LogError("CreateProfile validation failed for user {UserId}: Year {Year} is out of range", userId, request.Year);
-                throw new ValidationException("Year must be between 1 and 4");
-            }
-
-            if (request.CGPA < 0 || request.CGPA > 10)
-            {
-                _logger.LogError("CreateProfile validation failed for user {UserId}: CGPA {Cgpa} is out of range", userId, request.CGPA);
-                throw new ValidationException("CGPA must be between 0 and 10");
-            }
-
-            if (await _repo.ExistsByUserIdAsync(userId))
-            {
-                _logger.LogWarning("Attempt to create duplicate profile for user {UserId}", userId);
+            if (await _repo.ExistsByUserIdAsync(userId, cancellationToken))
                 throw new ConflictException("Profile already exists for this user.");
-            }
 
             var student = new Student
             {
@@ -104,61 +43,32 @@ namespace StudentService.Services
 
             student.ProfileProgress = ProfileProgressCalculator.Calculate(student);
 
-            await _repo.AddAsync(student);
-            await _repo.SaveChangesAsync();
+            await _repo.AddAsync(student, cancellationToken);
+            await _repo.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Profile created for user {UserId}", userId);
         }
 
-        public async Task<StudentProfileResponse> GetProfileAsync(Guid userId)
+        public async Task<StudentProfileResponse> GetProfileAsync(Guid userId, CancellationToken cancellationToken)
         {
-            var student = await _repo.GetByUserIdAsync(userId)
+            var student = await _repo.GetByUserIdAsync(userId, cancellationToken)
                 ?? throw new NotFoundException($"Profile not found for user {userId}.");
 
             return Map(student);
         }
 
-        public async Task<StudentProfileShortResponse> GetProfileByIdAsync(Guid studentId)
+        public async Task<StudentProfileShortResponse> GetProfileByIdAsync(Guid studentId, CancellationToken cancellationToken)
         {
-            var student = await _repo.GetByIdAsync(studentId)
+            var student = await _repo.GetByIdAsync(studentId, cancellationToken)
                 ?? throw new NotFoundException($"Profile not found for student {studentId}.");
+
             return MapShortDto(student);
         }
 
-        public async Task UpdateProfileAsync(Guid userId, UpdateStudentProfileRequest dto)
+        public async Task UpdateProfileAsync(Guid userId, UpdateStudentProfileRequest dto, CancellationToken cancellationToken)
         {
-            if (dto == null)
-            {
-                _logger.LogError("Invalid update profile request for user {UserId}: request is null", userId);
-                throw new ValidationException("Invalid request");
-            }
-
-            var student = await _repo.GetByUserIdAsync(userId)
+            var student = await _repo.GetByUserIdAsync(userId, cancellationToken)
                 ?? throw new NotFoundException($"Profile not found for user {userId}.");
-
-            if (dto.Year.HasValue && (dto.Year < 1 || dto.Year > 4))
-            {
-                _logger.LogError("UpdateProfile validation failed for user {UserId}: Year {Year} is out of range", userId, dto.Year);
-                throw new ValidationException("Year must be between 1 and 4.");
-            }
-
-            if (dto.CGPA.HasValue && (dto.CGPA < 0 || dto.CGPA > 10))
-            {
-                _logger.LogError("UpdateProfile validation failed for user {UserId}: CGPA {Cgpa} is out of range", userId, dto.CGPA);
-                throw new ValidationException("CGPA must be between 0 and 10.");
-            }
-
-            if (dto.FullName != null && string.IsNullOrWhiteSpace(dto.FullName))
-            {
-                _logger.LogError("UpdateProfile validation failed for user {UserId}: FullName is empty", userId);
-                throw new ValidationException("Full name cannot be empty.");
-            }
-
-            if (dto.PhoneNumber != null && string.IsNullOrWhiteSpace(dto.PhoneNumber))
-            {
-                _logger.LogError("UpdateProfile validation failed for user {UserId}: PhoneNumber is empty", userId);
-                throw new ValidationException("Phone number cannot be empty.");
-            }
 
             student.FullName = dto.FullName ?? student.FullName;
             student.PhoneNumber = dto.PhoneNumber ?? student.PhoneNumber;
@@ -170,10 +80,8 @@ namespace StudentService.Services
             if (dto.Skills != null)
             {
                 student.Skills.Clear();
-                foreach (var skill in dto.Skills)
+                foreach (var skill in dto.Skills.Where(s => !string.IsNullOrWhiteSpace(s)))
                 {
-                    if (string.IsNullOrWhiteSpace(skill))
-                        continue;
                     student.Skills.Add(new StudentSkill
                     {
                         Id = Guid.NewGuid(),
@@ -184,113 +92,83 @@ namespace StudentService.Services
 
             student.ProfileProgress = ProfileProgressCalculator.Calculate(student);
 
-            await _repo.SaveChangesAsync();
+            await _repo.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Profile updated for user {UserId}", userId);
         }
 
-        public async Task DeleteProfileAsync(Guid studentId)
+        public async Task DeleteProfileAsync(Guid studentId, CancellationToken cancellationToken)
         {
-            var student = await _repo.GetByIdAsync(studentId)
+            var student = await _repo.GetByIdAsync(studentId, cancellationToken)
                 ?? throw new NotFoundException($"Profile not found for student {studentId}.");
 
-            await _repo.DeleteAsync(student);
-            await _repo.SaveChangesAsync();
+            await _repo.DeleteAsync(student, cancellationToken);
+            await _repo.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Profile deleted for student {StudentId}", studentId);
         }
 
-        public async Task<List<StudentProfileResponse>> GetAllProfilesAsync()
+        public async Task<List<StudentProfileResponse>> GetAllProfilesAsync(CancellationToken cancellationToken)
         {
-            var students = await _repo.GetAllAsync();
+            var students = await _repo.GetAllAsync(cancellationToken);
             return students.Select(Map).ToList();
         }
 
-        public async Task<List<StudentProfileResponse>> GetProfilesInBulkAsync(List<Guid> userIds)
+        public async Task<List<StudentProfileResponse>> GetProfilesInBulkAsync(List<Guid> userIds, CancellationToken cancellationToken)
         {
-            if (userIds == null)
-                throw new ValidationException("UserIds list cannot be null.");
-
-            if (userIds.Count == 0)
-                return new List<StudentProfileResponse>();
-
-            if (userIds.Count > 100)
-                throw new ValidationException("Maximum 100 user IDs per request.");
-
-            var students = await _repo.GetByUserIdsAsync(userIds);
+            var students = await _repo.GetByUserIdsAsync(userIds, cancellationToken);
             return students.Select(Map).ToList();
         }
 
-        public async Task<ProfileCompletionResponse> GetProfileCompletionStatusAsync(Guid userId)
+        public async Task<ProfileCompletionResponse> GetProfileCompletionStatusAsync(Guid userId, CancellationToken cancellationToken)
         {
-            var student = await _repo.GetByUserIdAsync(userId)
+            var student = await _repo.GetByUserIdAsync(userId, cancellationToken)
                 ?? throw new NotFoundException($"Profile not found for user {userId}.");
 
-            var academicInfoCompleted = AcademicInfoComplete(student);
-            var skillsCompleted = SkillsCompleted(student);
-            var contactCompleted = ContactCompleted(student);
-            var resumeUploaded = ResumeUploaded(student);
-
-            return new ProfileCompletionResponse
-            (
-                academicInfoCompleted,
-                skillsCompleted,
-                contactCompleted,
-                resumeUploaded,
+            return new ProfileCompletionResponse(
+                AcademicInfoComplete(student),
+                SkillsCompleted(student),
+                ContactCompleted(student),
+                ResumeUploaded(student),
                 student.ProfileProgress
             );
         }
 
+        // ---------------- PRIVATE HELPERS ----------------
         private static StudentProfileShortResponse MapShortDto(Student student)
         {
-
-            var academicInfoCompleted = AcademicInfoComplete(student);
-            var skillsCompleted = SkillsCompleted(student);
-            var contactCompleted = ContactCompleted(student);
-            var resumeUploaded = ResumeUploaded(student);
-
-            return new StudentProfileShortResponse
-            (
+            return new StudentProfileShortResponse(
                 student.Id,
                 student.FullName,
                 student.Email,
                 student.ProfileProgress,
                 student.IsPlaced,
-                academicInfoCompleted,
-                skillsCompleted,
-                contactCompleted,
-                resumeUploaded
+                AcademicInfoComplete(student),
+                SkillsCompleted(student),
+                ContactCompleted(student),
+                ResumeUploaded(student)
             );
         }
 
-        private static bool AcademicInfoComplete(Student student)
-        {
-            return !string.IsNullOrEmpty(student.RollNo) &&
-                   !string.IsNullOrEmpty(student.EnrollmentNo) &&
-                   !string.IsNullOrEmpty(student.Course) &&
-                   !string.IsNullOrEmpty(student.Branch);
-        }
+        private static bool AcademicInfoComplete(Student student) =>
+            !string.IsNullOrEmpty(student.RollNo) &&
+            !string.IsNullOrEmpty(student.EnrollmentNo) &&
+            !string.IsNullOrEmpty(student.Course) &&
+            !string.IsNullOrEmpty(student.Branch);
 
-        private static bool SkillsCompleted(Student student)
-        {
-            return student.Skills.Any();
-        }
+        private static bool SkillsCompleted(Student student) =>
+            student.Skills.Any();
 
-        private static bool ResumeUploaded(Student student)
-        {
-            return student.Documents.Any(d => d.DocumentType == "Resume");
-        }
+        private static bool ResumeUploaded(Student student) =>
+            student.Documents.Any(d => d.DocumentType == "Resume");
 
-        private static bool ContactCompleted(Student student)
-        {
-            return !string.IsNullOrEmpty(student.Email) &&
-                   !string.IsNullOrEmpty(student.PhoneNumber);
-        }
+        private static bool ContactCompleted(Student student) =>
+            !string.IsNullOrEmpty(student.Email) &&
+            !string.IsNullOrEmpty(student.PhoneNumber);
 
         private static StudentProfileResponse Map(Student student)
         {
-            return new StudentProfileResponse
-            (
+            return new StudentProfileResponse(
                 student.Id,
                 student.RollNo,
                 student.EnrollmentNo,
