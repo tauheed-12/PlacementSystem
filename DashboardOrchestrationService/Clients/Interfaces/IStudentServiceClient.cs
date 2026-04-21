@@ -5,6 +5,6 @@ namespace DashboardOrchestrationService.Clients.Interfaces
 {
     public interface IStudentServiceClient
     {
-        Task<StudentProfileDto> GetStudentProfileById(Guid studentId);
+        Task<StudentProfileDto> GetStudentProfileAsync(Guid studentId);
     }
 }

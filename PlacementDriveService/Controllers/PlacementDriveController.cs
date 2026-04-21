@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using PlacementDriveService.DTOs;
 using PlacementDriveService.Enums;
-using PlacementDriveService.Infrastructure;
+using Common.Contracts.Infrastructure;
 using PlacementDriveService.Services.Interfaces;
 using Common.Contracts.Web;
+using FluentValidation;
 
 namespace PlacementDriveService.Controllers
 {
@@ -20,27 +21,46 @@ namespace PlacementDriveService.Controllers
             _contextAccessor = contextAccessor;
         }
 
+        private async Task<IActionResult?> ValidateAsync<T>(T model, IValidator<T> validator, CancellationToken ct)
+        {
+            var result = await validator.ValidateAsync(model, ct);
+            if (!result.IsValid)
+                return BadRequest(ApiEnvelope<object>.Fail(
+                    "Validation failed",
+                    result.Errors.Select(e => e.ErrorMessage)));
+
+            return null;
+        }
+
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] DriveCreateRequest dto, CancellationToken ct)
+        public async Task<IActionResult> Create([FromBody] DriveCreateRequest dto, [FromServices] IValidator<DriveCreateRequest> validator, CancellationToken ct)
         {
             var context = _contextAccessor.GetContext();
             if (!context.HasAnyRole(Roles.Admin, Roles.Recruiter, Roles.PlacementCoordinator))
                 return Forbid();
 
-            var id = await _service.CreateDriveAsync(dto, context.UserId);
+            var validationResponse = await ValidateAsync(dto, validator, ct);
+            if (validationResponse != null)
+                return validationResponse;
+
+            var id = await _service.CreateDriveAsync(dto, context.UserId, ct);
             return Created(string.Empty, ApiEnvelope<object>.Ok("Drive created successfully", new { id }));
         }
 
       
         [HttpPut("{id:guid}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] DriveUpdateRequest dto, CancellationToken ct)
+        public async Task<IActionResult> Update(Guid id, [FromBody] DriveUpdateRequest dto, [FromServices] IValidator<DriveUpdateRequest> validator, CancellationToken ct)
         {
             var context = _contextAccessor.GetContext();
             if (!context.HasAnyRole(Roles.Admin, Roles.Recruiter, Roles.PlacementCoordinator))
                 return Forbid();
 
-            await _service.UpdateDriveAsync(id, dto);
+            var validationResponse = await ValidateAsync(dto, validator, ct);
+            if (validationResponse != null)
+                return validationResponse;
+
+            await _service.UpdateDriveAsync(id, dto, ct);
             return Ok(ApiEnvelope<object>.Ok("Drive updated successfully", new { id }));
         }
 
@@ -52,7 +72,7 @@ namespace PlacementDriveService.Controllers
             if (!context.HasAnyRole(Roles.Admin, Roles.Recruiter, Roles.PlacementCoordinator))
                 return Forbid();
 
-            await _service.DeleteDriveAsync(id);
+            await _service.DeleteDriveAsync(id, ct);
             return NoContent();
         }
 
@@ -67,7 +87,7 @@ namespace PlacementDriveService.Controllers
             page = page < 1 ? 1 : page;
             pageSize = (pageSize < 1 || pageSize > 100) ? 10 : pageSize;
 
-            var result = await _service.GetOpenDrivesAsync(page, pageSize);
+            var result = await _service.GetOpenDrivesAsync(page, pageSize, ct);
             return Ok(ApiEnvelope<object>.Ok("Drives fetched successfully", result));
         }
 
@@ -79,7 +99,7 @@ namespace PlacementDriveService.Controllers
             if (!context.HasAnyRole(Roles.Student, Roles.TPO, Roles.Admin, Roles.PlacementCoordinator))
                 return Forbid();
 
-            var result = await _service.GetDriveByIdAsync(id);
+            var result = await _service.GetDriveByIdAsync(id, ct);
             return Ok(ApiEnvelope<object>.Ok("Drive fetched successfully", result));
         }
 
@@ -94,7 +114,7 @@ namespace PlacementDriveService.Controllers
             if (driveIds == null || driveIds.Count == 0)
                 return Ok(ApiEnvelope<object>.Ok("No drives provided", new List<DriveResponse>()));
 
-            var result = await _service.GetDrivesBulkAsync(driveIds);
+            var result = await _service.GetDrivesBulkAsync(driveIds, ct);
             return Ok(ApiEnvelope<object>.Ok("Drives fetched successfully", result));
         }
     }

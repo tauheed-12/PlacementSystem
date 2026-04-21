@@ -12,9 +12,9 @@ namespace AuthService.Services
             _serviceScopeFactory = serviceScopeFactory;
         }
 
-        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+        protected override async Task ExecuteAsync(CancellationToken ct)
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (!ct.IsCancellationRequested)
             {
                 using var scope = _serviceScopeFactory.CreateScope();
                 var repo = scope.ServiceProvider.GetRequiredService<IUserRepository>();
@@ -37,9 +37,9 @@ namespace AuthService.Services
                     }
                 }
 
-                await repo.SaveChangesAsync();
+                await repo.SaveChangesAsync(ct);
 
-                await Task.Delay(5000, cancellationToken);
+                await Task.Delay(5000, ct);
             }
         }
     }

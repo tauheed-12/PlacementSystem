@@ -1,10 +1,8 @@
-﻿// Clients/Interfaces/IApplicationServiceClient.cs
+﻿namespace DashboardOrchestrationService.Clients.Interfaces;
+
 using DashboardOrchestrationService.DTOs;
 
-namespace DashboardOrchestrationService.Clients.Interfaces
+public interface IApplicationServiceClient
 {
-    public interface IApplicationServiceClient
-    {
-        Task<List<ApplicationStatusResponse>> GetApplicationsByUserId(Guid userId);
-    }
+    Task<List<ApplicationStatusDto>> GetApplicationsAsync(Guid studentId);
 }

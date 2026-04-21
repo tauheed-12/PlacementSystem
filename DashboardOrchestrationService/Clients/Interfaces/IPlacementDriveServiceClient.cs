@@ -1,11 +1,9 @@
-﻿// Clients/Interfaces/IPlacementDriveServiceClient.cs
+﻿namespace DashboardOrchestrationService.Clients.Interfaces;
+
 using DashboardOrchestrationService.DTOs;
 
-namespace DashboardOrchestrationService.Clients.Interfaces
+public interface IPlacementDriveServiceClient
 {
-    public interface IPlacementDriveServiceClient
-    {
-        Task<List<DriveDetailsDto>> GetDrivesByIds(List<Guid> driveIds);
-        Task<int> GetTotalEligibleDrivesCount(Guid studentId); // added
-    }
+    Task<List<DriveDetailsDto>> GetDrivesByIdsAsync(List<Guid> driveIds);
+    Task<int> GetEligibleDrivesCountAsync(Guid studentId);
 }

@@ -15,69 +15,15 @@ namespace PlacementDriveService.Services
         private readonly IPlacementDriveRepository _repo;
         private readonly ILogger<PlacementDriveService> _logger;
 
-        public PlacementDriveService(
-            IPlacementDriveRepository repo,
-            ILogger<PlacementDriveService> logger)
+        public PlacementDriveService(IPlacementDriveRepository repo, ILogger<PlacementDriveService> logger)
         {
             _repo = repo;
             _logger = logger;
         }
 
-        // ---------------- VALIDATION METHODS ----------------
-        private void ValidateCreateRequest(DriveCreateRequest request)
-        {
-            if (request == null)
-                throw new ValidationException("Request cannot be null");
-
-            if (string.IsNullOrWhiteSpace(request.CompanyName))
-                throw new ValidationException("Company name is required");
-
-            if (string.IsNullOrWhiteSpace(request.JobRole))
-                throw new ValidationException("Job role is required");
-
-            if (request.Package <= 0)
-                throw new ValidationException("Package must be greater than 0");
-
-            if (request.DriveDate <= DateTime.UtcNow)
-                throw new ValidationException("Drive date must be in the future");
-
-            if (request.ApplicationDeadline <= DateTime.UtcNow)
-                throw new ValidationException("Application deadline must be in the future");
-
-            if (request.ApplicationDeadline > request.DriveDate)
-                throw new ValidationException("Application deadline cannot be after drive date");
-
-            if (request.AllowedBranches == null || !request.AllowedBranches.Any())
-                throw new ValidationException("At least one branch must be allowed");
-        }
-
-        private void ValidateUpdateRequest(DriveUpdateRequest request)
-        {
-            if (request == null)
-                throw new ValidationException("Request cannot be null");
-
-            if (request.Package.HasValue && request.Package <= 0)
-                throw new ValidationException("Package must be greater than 0");
-
-            if (request.DriveDate.HasValue && request.DriveDate <= DateTime.UtcNow)
-                throw new ValidationException("Drive date must be in the future");
-
-            if (request.ApplicationDeadline.HasValue && request.ApplicationDeadline <= DateTime.UtcNow)
-                throw new ValidationException("Application deadline must be in the future");
-
-            if (request.ApplicationDeadline.HasValue && request.DriveDate.HasValue &&
-                request.ApplicationDeadline > request.DriveDate)
-                throw new ValidationException("Application deadline cannot be after drive date");
-        }
-
         // ---------------- CREATE ----------------
-        public async Task<Guid> CreateDriveAsync(DriveCreateRequest request, Guid UserId)
+        public async Task<Guid> CreateDriveAsync(DriveCreateRequest request, Guid UserId, CancellationToken ct)
         {
-            ValidateCreateRequest(request);
-
-            if (UserId == Guid.Empty)
-                throw new ValidationException("Invalid user ID");
-
             _logger.LogInformation("Creating placement drive for company {Company}", request.CompanyName);
 
             var drive = new PlacementDrive
@@ -93,8 +39,8 @@ namespace PlacementDriveService.Services
                 Status = DriveStatus.Scheduled,
             };
 
-            await _repo.AddAsync(drive);
-            await _repo.SaveChangesAsync();
+            await _repo.AddAsync(drive, ct);
+            await _repo.SaveChangesAsync(ct);
 
             _logger.LogInformation("Placement drive created successfully with Id {DriveId}", drive.Id);
 
@@ -118,26 +64,24 @@ namespace PlacementDriveService.Services
                 Key = UserId.ToString(),
             };
 
-            await _repo.AddOutboxMessageAsync(newOutboxMsg);
+            await _repo.AddOutboxMessageAsync(newOutboxMsg, ct);
             _logger.LogInformation("User registration event add for user {CompanyName}", request.CompanyName);
 
-            await _repo.SaveChangesAsync();
+            await _repo.SaveChangesAsync(ct);
             _logger.LogInformation("Kafka event published for drive {DriveId}", drive.Id);
 
             return drive.Id;
         }
 
         // ---------------- UPDATE ----------------
-        public async Task UpdateDriveAsync(Guid id, DriveUpdateRequest request)
+        public async Task UpdateDriveAsync(Guid id, DriveUpdateRequest request, CancellationToken ct)
         {
             if (id == Guid.Empty)
                 throw new ValidationException("Invalid drive ID");
 
-            ValidateUpdateRequest(request);
-
             _logger.LogInformation("Updating placement drive {DriveId}", id);
 
-            var drive = await _repo.GetByIdAsync(id);
+            var drive = await _repo.GetByIdAsync(id, ct);
 
             if (drive == null)
             {
@@ -154,20 +98,20 @@ namespace PlacementDriveService.Services
             drive.ApplicationDeadline = request.ApplicationDeadline ?? drive.ApplicationDeadline;
             drive.Status = request.Status ?? drive.Status;
 
-            await _repo.SaveChangesAsync();
+            await _repo.SaveChangesAsync(ct);
 
             _logger.LogInformation("Drive updated successfully {DriveId}", id);
         }
 
         // ---------------- DELETE ----------------
-        public async Task DeleteDriveAsync(Guid id)
+        public async Task DeleteDriveAsync(Guid id, CancellationToken ct)
         {
             if (id == Guid.Empty)
                 throw new ValidationException("Invalid drive ID");
 
             _logger.LogInformation("Deleting placement drive {DriveId}", id);
 
-            var drive = await _repo.GetByIdAsync(id);
+            var drive = await _repo.GetByIdAsync(id, ct);
 
             if (drive == null)
             {
@@ -175,14 +119,14 @@ namespace PlacementDriveService.Services
                 throw new NotFoundException("Placement drive not found");
             }
 
-            await _repo.DeleteAsync(drive);
-            await _repo.SaveChangesAsync();
+            await _repo.DeleteAsync(drive, ct);
+            await _repo.SaveChangesAsync(ct);
 
             _logger.LogInformation("Drive deleted successfully {DriveId}", id);
         }
 
         // ---------------- GET OPEN DRIVES ----------------
-        public async Task<List<DriveResponse>> GetOpenDrivesAsync(int page, int pageSize)
+        public async Task<List<DriveResponse>> GetOpenDrivesAsync(int page, int pageSize, CancellationToken ct)
         {
             if (page <= 0)
                 throw new ValidationException("Page must be greater than 0");
@@ -192,7 +136,7 @@ namespace PlacementDriveService.Services
 
             _logger.LogInformation("Fetching open drives page {Page}", page);
 
-            return await _repo.GetOpenDrives()
+            return await _repo.GetOpenDrives(ct)
                 .OrderByDescending(d => d.CreatedAt)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -208,18 +152,18 @@ namespace PlacementDriveService.Services
                     d.ApplicationDeadline,
                     d.Status
                 ))
-                .ToListAsync();
+                .ToListAsync(ct);
         }
 
         // ---------------- GET BY ID ----------------
-        public async Task<DriveResponse> GetDriveByIdAsync(Guid id)
+        public async Task<DriveResponse> GetDriveByIdAsync(Guid id, CancellationToken ct)
         {
             if (id == Guid.Empty)
                 throw new ValidationException("Invalid drive ID");
 
             _logger.LogInformation("Fetching drive {DriveId}", id);
 
-            var drive = await _repo.GetByIdAsync(id);
+            var drive = await _repo.GetByIdAsync(id, ct);
 
             if (drive == null)
             {
@@ -242,7 +186,7 @@ namespace PlacementDriveService.Services
         }
 
         // ---------------- BULK FETCH ----------------
-        public async Task<List<DriveResponse>> GetDrivesBulkAsync(List<Guid> driveIds)
+        public async Task<List<DriveResponse>> GetDrivesBulkAsync(List<Guid> driveIds, CancellationToken ct)
         {
             if (driveIds == null || driveIds.Count == 0)
             {
@@ -257,7 +201,7 @@ namespace PlacementDriveService.Services
             {
                 if (id == Guid.Empty) continue;
 
-                var drive = await _repo.GetByIdAsync(id);
+                var drive = await _repo.GetByIdAsync(id, ct);
 
                 if (drive != null)
                 {

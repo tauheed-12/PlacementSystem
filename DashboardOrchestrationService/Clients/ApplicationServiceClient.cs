@@ -1,34 +1,40 @@
-﻿// Clients/ApplicationServiceClient.cs
+﻿using System.Net;
 using System.Net.Http.Json;
 using DashboardOrchestrationService.Clients.Interfaces;
 using DashboardOrchestrationService.DTOs;
 
-namespace DashboardOrchestrationService.Clients
+namespace DashboardOrchestrationService.Clients.Implementations;
+
+public class ApplicationServiceClient : IApplicationServiceClient
 {
-    public class ApplicationServiceClient : IApplicationServiceClient
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<ApplicationServiceClient> _logger;
+
+    public ApplicationServiceClient(HttpClient httpClient, ILogger<ApplicationServiceClient> logger)
     {
-        private readonly HttpClient _httpClient;
+        _httpClient = httpClient;
+        _logger = logger;
+    }
 
-        public ApplicationServiceClient(HttpClient httpClient)
+    public async Task<List<ApplicationStatusDto>> GetApplicationsAsync(Guid studentId)
+    {
+        var response = await _httpClient.GetAsync($"/api/applications/status/{studentId}");
+
+        if (response.IsSuccessStatusCode)
         {
-            _httpClient = httpClient;
+            var result = await response.Content.ReadFromJsonAsync<List<ApplicationStatusDto>>();
+            return result ?? [];
         }
 
-        public async Task<List<ApplicationStatusResponse>> GetApplicationsByUserId(Guid userId)
+        if (response.StatusCode == HttpStatusCode.NotFound)
         {
-            var response = await _httpClient.GetAsync($"/api/applications/status/{userId}");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var result = await response.Content.ReadFromJsonAsync<List<ApplicationStatusResponse>>();
-                return result ?? [];
-            }
-
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                return [];
-
-            throw new HttpRequestException(
-                $"ApplicationService failed for user {userId}. Status: {response.StatusCode}");
+            return [];
         }
+
+        _logger.LogError("Application service failed for {StudentId} with {StatusCode}",
+            studentId, response.StatusCode);
+
+        throw new HttpRequestException(
+            $"Application service error: {response.StatusCode}");
     }
 }

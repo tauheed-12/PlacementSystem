@@ -1,4 +1,4 @@
-using ApplicationService.Infrastructure;
+using Common.Contracts.Infrastructure;
 using ApplicationService.Services.Interfaces;
 using ApplicationService.Enums;
 using Common.Contracts.Web;

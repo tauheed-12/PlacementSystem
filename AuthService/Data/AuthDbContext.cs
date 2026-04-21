@@ -30,7 +30,6 @@ namespace AuthService.Data
                 entity.HasIndex(u => u.Email)
                     .IsUnique();
 
-                // byte[] maps to varbinary — cap at 64 bytes (HMAC-SHA256 output = 32, SHA512 = 64)
                 entity.Property(u => u.PasswordHash)
                     .IsRequired()
                     .HasMaxLength(64)

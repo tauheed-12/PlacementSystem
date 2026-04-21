@@ -1,10 +1,5 @@
-﻿using System;
-using System.Linq;
-using System.Threading.Tasks;
-using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
-using StudentService.Entities;
-using StudentService.Exceptions;
+﻿using StudentService.Entities;
+using Common.Contracts.Web;
 using StudentService.Repositories.Interfaces;
 using StudentService.Services.Interfaces;
 
@@ -21,7 +16,7 @@ namespace StudentService.Services
             _logger = logger;
         }
 
-        public async Task UploadDocumentAsync(Guid userId, string documentUrl, string documentType)
+        public async Task UploadDocumentAsync(Guid userId, string documentUrl, string documentType, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(documentUrl))
             {
@@ -43,7 +38,7 @@ namespace StudentService.Services
 
             documentType = documentType.Trim();
 
-            var student = await _repo.GetByUserIdAsync(userId)
+            var student = await _repo.GetByUserIdAsync(userId, cancellationToken)
                 ?? throw new NotFoundException("Student profile not found");
 
             // Prevent exact duplicate document (same url and type)
@@ -70,14 +65,14 @@ namespace StudentService.Services
                 UploadedAt = DateTime.UtcNow
             });
 
-            await _repo.SaveChangesAsync();
+            await _repo.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Document uploaded for user {UserId}: {Type}", userId, documentType);
         }
 
-        public async Task DeleteDocumentAsync(Guid userId, Guid documentId)
+        public async Task DeleteDocumentAsync(Guid userId, Guid documentId, CancellationToken cancellationToken)
         {
-            var student = await _repo.GetByUserIdAsync(userId)
+            var student = await _repo.GetByUserIdAsync(userId, cancellationToken)
                 ?? throw new NotFoundException("Student profile not found");
 
             var document = student.Documents.FirstOrDefault(d => d.Id == documentId);
@@ -90,14 +85,14 @@ namespace StudentService.Services
 
             student.Documents.Remove(document);
 
-            await _repo.SaveChangesAsync();
+            await _repo.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation("Document {DocumentId} deleted for user {UserId}", documentId, userId);
         }
 
-        public async Task<List<StudentDocument>> GetDocumentsAsync(Guid userId)
+        public async Task<List<StudentDocument>> GetDocumentsAsync(Guid userId, CancellationToken cancellationToken)
         {
-            var student = await _repo.GetByUserIdAsync(userId)
+            var student = await _repo.GetByUserIdAsync(userId, cancellationToken)
                 ?? throw new NotFoundException("Student profile not found");
 
             return student.Documents.ToList();

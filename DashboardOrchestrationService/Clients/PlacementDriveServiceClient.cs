@@ -1,56 +1,58 @@
-﻿// Clients/PlacementDriveServiceClient.cs
-using System.Net.Http.Json;
+﻿using System.Net;
 using DashboardOrchestrationService.Clients.Interfaces;
 using DashboardOrchestrationService.DTOs;
 
-namespace DashboardOrchestrationService.Clients
+namespace DashboardOrchestrationService.Clients.Implementations;
+
+public class PlacementDriveServiceClient : IPlacementDriveServiceClient
 {
-    public class PlacementDriveServiceClient : IPlacementDriveServiceClient
+    private readonly HttpClient _httpClient;
+    private readonly ILogger<PlacementDriveServiceClient> _logger;
+
+    public PlacementDriveServiceClient(HttpClient httpClient, ILogger<PlacementDriveServiceClient> logger)
     {
-        private readonly HttpClient _httpClient;
+        _httpClient = httpClient;
+        _logger = logger;
+    }
 
-        public PlacementDriveServiceClient(HttpClient httpClient)
+    public async Task<List<DriveDetailsDto>> GetDrivesByIdsAsync(List<Guid> driveIds)
+    {
+        if (driveIds == null || driveIds.Count == 0)
+            return [];
+
+        var response = await _httpClient.PostAsJsonAsync("/api/placementdrives/by-ids", driveIds);
+
+        if (response.IsSuccessStatusCode)
         {
-            _httpClient = httpClient;
+            var result = await response.Content.ReadFromJsonAsync<List<DriveDetailsDto>>();
+            return result ?? [];
         }
 
-        public async Task<List<DriveDetailsDto>> GetDrivesByIds(List<Guid> driveIds)
+        if (response.StatusCode == HttpStatusCode.NotFound)
         {
-            if (driveIds.Count == 0)
-                return [];
-
-            // POST because query strings can't handle large lists of GUIDs cleanly
-            var response = await _httpClient.PostAsJsonAsync("/api/placementdrives/by-ids", driveIds);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var result = await response.Content.ReadFromJsonAsync<List<DriveDetailsDto>>();
-                return result ?? [];
-            }
-
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-                return [];
-
-            throw new HttpRequestException(
-                $"PlacementDriveService failed fetching drive details. Status: {response.StatusCode}");
+            return [];
         }
 
-        public async Task<int> GetTotalEligibleDrivesCount(Guid studentId)
+        _logger.LogError("Drive service failed fetching drives. Status: {StatusCode}", response.StatusCode);
+
+        throw new HttpRequestException($"Drive service error: {response.StatusCode}");
+    }
+
+    public async Task<int> GetEligibleDrivesCountAsync(Guid studentId)
+    {
+        var response = await _httpClient.GetAsync($"/api/placementdrives/eligible-count/{studentId}");
+
+        if (response.IsSuccessStatusCode)
         {
-            //var response = await _httpClient.GetAsync($"/api/placementdrives/eligible-count/{studentId}");
-
-            //if (response.IsSuccessStatusCode)
-            //{
-            //    var result = await response.Content.ReadFromJsonAsync<int>();
-            //    return result;
-            //}
-
-            //if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            //    return 0;
-
-            //throw new HttpRequestException(
-            //    $"PlacementDriveService failed fetching eligible count. Status: {response.StatusCode}");
-            return 30;
+            var result = await response.Content.ReadFromJsonAsync<int>();
+            return result;
         }
+
+        if (response.StatusCode == HttpStatusCode.NotFound) return 0;
+
+        _logger.LogError("Drive count failed for {StudentId} with {StatusCode}",
+            studentId, response.StatusCode);
+
+        throw new HttpRequestException($"Drive count service error: {response.StatusCode}");
     }
 }

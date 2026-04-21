@@ -1,37 +1,39 @@
-﻿// Controllers/StudentDashboardController.cs
-using DashboardOrchestrationService.Infrastructure;
+﻿using Common.Contracts.Infrastructure;
 using DashboardOrchestrationService.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace DashboardOrchestrationService.Controllers
+namespace DashboardOrchestrationService.Controllers;
+
+[ApiController]
+[Route("api/dashboard/student")]
+public class StudentDashboardController : ControllerBase
 {
-    [ApiController]
-    [Route("api/dashboard/student")]
-    public class StudentDashboardController : ControllerBase
+    private readonly IStudentDashboardService _dashboardService;
+    private readonly ILogger<StudentDashboardController> _logger;
+    private readonly RequestContextAccessor _contextAccessor;
+
+    public StudentDashboardController(
+        IStudentDashboardService dashboardService,
+        ILogger<StudentDashboardController> logger,
+        RequestContextAccessor contextAccessor)
     {
-        private readonly IStudentDashboardService _dashboardService;
-        private readonly ILogger<StudentDashboardController> _logger;
-        private readonly RequestContextAccessor _requestContextAccessor;
+        _dashboardService = dashboardService;
+        _logger = logger;
+        _contextAccessor = contextAccessor;
+    }
 
-        public StudentDashboardController( IStudentDashboardService dashboardService, ILogger<StudentDashboardController> logger, RequestContextAccessor requestContextAccessor)
+    [HttpGet("{studentId:guid}")]
+    public async Task<IActionResult> GetDashboard(Guid studentId, CancellationToken ct)
+    {
+        var context = _contextAccessor.GetContext();
+
+        if (context.HasAnyRole(["Student"]) && context.UserId != studentId)
         {
-            _dashboardService = dashboardService;
-            _logger = logger;
-            _requestContextAccessor = requestContextAccessor;
+            _logger.LogWarning("Unauthorized access attempt by {UserId}", context.UserId);
+            return Forbid();
         }
 
-        [HttpGet("{studentId:guid}")]
-        public async Task<IActionResult> GetDashboard(Guid studentId)
-        {
-            var context = _requestContextAccessor.GetContext();
-
-            if (context.HasAnyRole(["Student"]) && context.UserId != studentId)
-            {
-                _logger.LogWarning("Unauthorized access attempt by user {UserId} for student {StudentId}", context.UserId, studentId);
-                return Forbid();
-            }
-            var dashboard = await _dashboardService.GetStudentDashboardAsync(studentId);
-            return Ok(dashboard);
-        }
+        var result = await _dashboardService.GetStudentDashboardAsync(studentId, ct);
+        return Ok(result);
     }
 }
