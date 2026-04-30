@@ -1,8 +1,8 @@
 ﻿using NotificationsService.Clients.Interfaces;
 using NotificationsService.Constants;
-using NotificationsService.Entites;
 using NotificationsService.Entities;
 using NotificationsService.Enums;
+using NotificationsService.Events;
 using NotificationsService.Repositories.Interfaces;
 
 namespace NotificationsService.Consumers
@@ -11,53 +11,57 @@ namespace NotificationsService.Consumers
     {
         private readonly IKafkaClient _kafkaClient;
         private readonly ILogger<InAppDeliveryWorker> _logger;
-        private readonly INotificationDeliveryRepo _deliveryRepo;
-        private readonly IInAppNotificationRepo _inAppNotificationRepo;
-        public InAppDeliveryWorker(IKafkaClient kafkaClient, ILogger<InAppDeliveryWorker> logger, INotificationDeliveryRepo deliveryRepo, IInAppNotificationRepo inAppNotificationRepo)
+        private readonly IServiceScopeFactory _scopeFactory;
+
+        public InAppDeliveryWorker(IKafkaClient kafkaClient, ILogger<InAppDeliveryWorker> logger, IServiceScopeFactory scopeFactory)
         {
             _kafkaClient = kafkaClient;
             _logger = logger;
-            _deliveryRepo = deliveryRepo;
-            _inAppNotificationRepo = inAppNotificationRepo;
+            _scopeFactory = scopeFactory;
         }
+
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await foreach (var (delivery, consumer, result) in _kafkaClient.Consume<NotificationDelivery>(
-                "notifications.delivery.inapp",
-                stoppingToken))
+            await foreach (var (delivery, consumer, result) in
+                _kafkaClient.Consume<InAppDeliveryEvent>("notifications.delivery.inapp", "inapp-delivery-worker", stoppingToken))
             {
+                using var scope = _scopeFactory.CreateScope();
+                var deliveryRepo = scope.ServiceProvider.GetRequiredService<INotificationDeliveryRepo>();
+                var inAppRepo = scope.ServiceProvider.GetRequiredService<IInAppNotificationRepo>();
+
                 try
                 {
-                    var isDelivered = await _deliveryRepo.CheckStatus(delivery.IntentId, NotificationChannel.InApp);
+                    var isDelivered = await deliveryRepo.CheckStatus(delivery.IntentId, NotificationChannel.InApp);
                     if (isDelivered)
+                    {
+                        _kafkaClient.Commit(consumer, result);
                         continue;
-               
-                    await _inAppNotificationRepo.AddAsync(new InAppNotification
+                    }
+
+                    await inAppRepo.AddAsync(new InAppNotification
                     {
                         Id = Guid.NewGuid(),
                         UserId = delivery.UserId,
                         Title = delivery.Title,
                         Body = delivery.Body,
                         IsRead = false,
-                        UpdatedAt = DateTime.UtcNow,
-                        CreatedAt = DateTime.UtcNow
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
                     });
 
-                    await _deliveryRepo.UpdateStatus(delivery.IntentId, NotificationChannel.InApp, DeliveryStatus.Delivered);
+                    await deliveryRepo.UpdateStatus(delivery.IntentId, NotificationChannel.InApp, DeliveryStatus.Delivered);
                     _kafkaClient.Commit(consumer, result);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing in-app delivery for delivery {DeliveryId}", delivery.Id);
-                    var retryCount = await _deliveryRepo.GetRetryCount(delivery.IntentId, NotificationChannel.InApp);
+                    _logger.LogError(ex, "Error processing in-app delivery {DeliveryId}", delivery.DeliveryId);
+
+                    var retryCount = await deliveryRepo.GetRetryCount(delivery.IntentId, NotificationChannel.InApp);
+
                     if (retryCount < RetryCount.MaxRetryCount)
-                    {
-                        await _deliveryRepo.UpdateRetryCount(delivery.IntentId, NotificationChannel.InApp, retryCount + 1);
-                    }
+                        await deliveryRepo.UpdateRetryCount(delivery.IntentId, NotificationChannel.InApp, retryCount + 1);
                     else
-                    {
-                        await _deliveryRepo.UpdateStatus(delivery.IntentId, NotificationChannel.InApp, DeliveryStatus.Failed);
-                    }
+                        await deliveryRepo.UpdateStatus(delivery.IntentId, NotificationChannel.InApp, DeliveryStatus.Failed);
                 }
             }
         }

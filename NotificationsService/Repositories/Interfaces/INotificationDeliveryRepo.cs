@@ -1,5 +1,4 @@
-﻿using NotificationsService.Entites;
-using NotificationsService.Entities;
+﻿using NotificationsService.Entities;
 using NotificationsService.Enums;
 
 namespace NotificationsService.Repositories.Interfaces
@@ -12,5 +11,7 @@ namespace NotificationsService.Repositories.Interfaces
         public Task UpdateStatus(Guid intentId, NotificationChannel channel, DeliveryStatus status);
         public Task UpdateRetryCount(Guid intentId, NotificationChannel channel, int retryCount);
         public Task<int> GetRetryCount(Guid intentId, NotificationChannel channel);
+        public Task<string> GetEmailByIntentIdAndChannel(Guid intentId, NotificationChannel channel);
+        public Task SaveChangesAsync();
     }
 }

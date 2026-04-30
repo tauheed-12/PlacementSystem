@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using NotificationsService.Entites;
 using NotificationsService.Entities;
 
 namespace NotificationsService.Data
@@ -17,6 +16,19 @@ namespace NotificationsService.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // ─── NotificationIntent ─────────────────────────
+            modelBuilder.Entity<NotificationIntent>(entity =>
+            {
+                entity.HasKey(ni => ni.IntentId);
+
+                entity.Property(ni => ni.EventType)
+                    .IsRequired()
+                    .HasMaxLength(100);
+
+                entity.Property(ni => ni.CreatedAt)
+                    .HasDefaultValueSql("NOW()");
+            });
         }
     }
 }

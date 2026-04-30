@@ -1,12 +1,12 @@
 ﻿using AuthService.DTOs;
 using AuthService.Entities;
-using AuthService.Enums;
 using AuthService.Helpers;
 using Common.Contracts.Web;
 using AuthService.Repositories.Interfaces;
 using AuthService.Services.Interfaces;
 using System.Security.Cryptography;
 using System.Text.Json;
+using AuthService.Enums;
 
 namespace AuthService.Services
 {
@@ -77,21 +77,23 @@ namespace AuthService.Services
 
             var link = $"{_config["Frontend:BaseUrl"]}/verify-email?token={rawToken}";
 
-            var message = new VerifyEmailEvent
-            (
-                user.Id,
-                EventType.UserRegistered,
-                AudienceType.Targeted,
-                new Dictionary<string, string>
+            var message = new NotificationEvent
+            {
+                EventId = Guid.NewGuid(),
+                EventType = NotificationEventType.UserRegistered,
+                AudienceType = NotificationAudience.Targeted,
+                TargetUserIds = new List<Guid> { user.Id },
+                Data = new Dictionary<string, string>
                 {
                     { "Email", user.Email },
                     { "Link", link }
                 }
-            );
+            };
+
             var outbox = new OutboxMessage
             {
                 Id = Guid.NewGuid(),
-                EventType = nameof(VerifyEmailEvent),
+                EventType = NotificationEventType.UserRegistered.ToString(),
                 Payload = JsonSerializer.Serialize(message),
                 CreatedAt = DateTime.UtcNow,
                 Key = user.Id.ToString(),
@@ -162,21 +164,22 @@ namespace AuthService.Services
             user.IsEmailVerified = true;
             userToken.IsUsed = true;
 
-            var message = new VerifyEmailEvent
-                (
-                    user.Id,
-                    EventType.EmailVerified,
-                    AudienceType.Targeted,
-                     new Dictionary<string, string>
+            var message = new NotificationEvent
+                {
+                    EventId = Guid.NewGuid(),
+                    EventType = NotificationEventType.EmailVerified,
+                    AudienceType = NotificationAudience.Targeted,
+                    TargetUserIds = new List<Guid> { user.Id },
+                    Data = new Dictionary<string, string>
                      {
                         { "Email", user.Email }
                      }
-                );
+                };
 
             var outboxMessage = new OutboxMessage
             {
                 Id = new Guid(),
-                EventType = nameof(VerifyEmailEvent),
+                EventType = NotificationEventType.EmailVerified.ToString(),
                 Payload = JsonSerializer.Serialize(message),
                 CreatedAt = DateTime.UtcNow,
                 Key = user.Id.ToString(),
@@ -228,21 +231,23 @@ namespace AuthService.Services
 
             var link = $"{_config["Frontend:BaseUrl"]}/reset-password?token={rawToken}";
            
-            var message = new VerifyEmailEvent
-                (
-                    user.Id,
-                    EventType.PasswordResetRequested,
-                    AudienceType.Targeted,
-                     new Dictionary<string, string>
+            var message = new NotificationEvent
+                {
+                    EventId = Guid.NewGuid(),
+                    EventType = NotificationEventType.PasswordResetRequested,
+                    AudienceType = NotificationAudience.Targeted,
+                    TargetUserIds = new List<Guid> { user.Id },
+                    Data = new Dictionary<string, string>
                      {
                         { "Email", user.Email },
                         { "Link", link }
                      }
-                );
+                };
+
             var outboxMessage = new OutboxMessage
             {
                 Id = Guid.NewGuid(),
-                EventType = nameof(VerifyEmailEvent),
+                EventType = NotificationEventType.PasswordResetRequested.ToString(),
                 Payload = JsonSerializer.Serialize(message),
                 CreatedAt = DateTime.UtcNow,
                 Key = user.Id.ToString(),
@@ -270,21 +275,22 @@ namespace AuthService.Services
             user.PasswordSalt = salt;
             token.IsUsed = true;
 
-            var message = new VerifyEmailEvent
-                (
-                    user.Id,
-                    EventType.PasswordResetCompleted,
-                    AudienceType.Targeted,
-                     new Dictionary<string, string>
+            var message = new NotificationEvent
+                {
+                    EventId = Guid.NewGuid(),
+                    EventType = NotificationEventType.PasswordResetCompleted,
+                    AudienceType = NotificationAudience.Targeted,
+                    TargetUserIds = new List<Guid> { user.Id },
+                    Data = new Dictionary<string, string>
                      {
                         { "Email", user.Email }
                      }
-                );
+                };
 
             var outboxMessage = new OutboxMessage
             {
                 Id = new Guid(),
-                EventType = nameof(VerifyEmailEvent),
+                EventType = NotificationEventType.PasswordResetCompleted.ToString(),
                 Payload = JsonSerializer.Serialize(message),
                 CreatedAt = DateTime.UtcNow,
                 Key = user.Id.ToString(),

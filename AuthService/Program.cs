@@ -4,6 +4,8 @@ using AuthService.Repositories;
 using AuthService.Repositories.Interfaces;
 using AuthService.Services;
 using AuthService.Services.Interfaces;
+using AuthService.Validators;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -25,6 +27,10 @@ builder.Configuration
 // Controllers + Swagger
 // -----------------------------------------------------
 builder.Services.AddControllers();
+builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<LoginRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<ForgotPasswordRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<ResetPasswordRequestValidator>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -32,19 +38,7 @@ builder.Services.AddSwaggerGen();
 // -----------------------------------------------------
 // Database Configuration
 // -----------------------------------------------------
-builder.Services.AddDbContext<AuthDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("AuthDb"),
-        sqlOptions =>
-        {
-            sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(10),
-                errorNumbersToAdd: null
-            );
-        })
-);
-
+builder.Services.AddDbContext<AuthDbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 // -----------------------------------------------------
 // Application Services
@@ -52,6 +46,8 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService.Services.AuthService>();
+builder.Services.AddScoped<IKafkaService, KafkaService>();
+builder.Services.AddHostedService<OutboxProcessor>();
 
 
 // -----------------------------------------------------

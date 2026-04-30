@@ -1,8 +1,9 @@
 ﻿using Confluent.Kafka;
 using NotificationsService.Clients.Interfaces;
-using NotificationsService.Entites;
 using NotificationsService.Entities;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Runtime.CompilerServices;
 
 namespace NotificationsService.Clients
 {
@@ -11,82 +12,61 @@ namespace NotificationsService.Clients
         private readonly IProducer<string, string> _producer;
         private readonly ConsumerConfig _consumerConfig;
 
-        public KafkaClient()
+        private static readonly JsonSerializerOptions _jsonOptions = new()
         {
-            var producerConfig = new ProducerConfig
-            {
-                BootstrapServers = "localhost:9092",
-                Acks = Acks.All
-            };
+            Converters = { new JsonStringEnumConverter() },
+            PropertyNameCaseInsensitive = true
+        };
+
+        public KafkaClient(IConfiguration config)
+        {
+            var bootstrapServers = config["Kafka:BootstrapServers"]
+                ?? throw new InvalidOperationException("Kafka:BootstrapServers is not configured.");
 
             _consumerConfig = new ConsumerConfig
             {
-                BootstrapServers = "localhost:9092",
-                GroupId = "notification-service",
+                BootstrapServers = bootstrapServers,
                 AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnableAutoCommit = false
             };
 
-            _producer = new ProducerBuilder<string, string>(producerConfig).Build();
+            _producer = new ProducerBuilder<string, string>(new ProducerConfig
+            {
+                BootstrapServers = bootstrapServers,
+                Acks = Acks.All
+            }).Build();
         }
 
-        // PRODUCE MESSAGE
         public async Task Publish<T>(string topic, string key, T message)
         {
-            var payload = JsonSerializer.Serialize(message);
-
-            await _producer.ProduceAsync(
-                topic,
-                new Message<string, string>
-                {
-                    Key = key,
-                    Value = payload
-                });
+            var payload = JsonSerializer.Serialize(message, _jsonOptions);
+            await _producer.ProduceAsync(topic, new Message<string, string> { Key = key, Value = payload });
         }
 
-        public async Task Publish(string topic, NotificationDelivery message)
+        public async Task PublishRaw(string topic, string key, string message)
         {
-            var payload = JsonSerializer.Serialize(message);
-            await _producer.ProduceAsync(
-                topic,
-                new Message<string, string>
-                {
-                    Value = payload
-                });
+            await _producer.ProduceAsync(topic, new Message<string, string> { Key = key, Value = message });
         }
 
-        // CONSUME MESSAGE
         public async IAsyncEnumerable<(T Message, IConsumer<string, string> Consumer, ConsumeResult<string, string> Result)>
-        Consume<T>(
-            string topic,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token)
+        Consume<T>(string topic, string groupId, [EnumeratorCancellation] CancellationToken token)
         {
-            var consumer = new ConsumerBuilder<string, string>(_consumerConfig).Build();
+            var config = new ConsumerConfig(_consumerConfig) { GroupId = groupId };
+            var consumer = new ConsumerBuilder<string, string>(config).Build();
             consumer.Subscribe(topic);
 
             try
             {
                 while (!token.IsCancellationRequested)
                 {
-                    ConsumeResult<string, string>? result;
+                    ConsumeResult<string, string>? result = null;
+                    try { result = await Task.Run(() => consumer.Consume(token), token); }
+                    catch (OperationCanceledException) { break; }
 
-                    try
-                    {
-                        result = consumer.Consume(token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        break;
-                    }
+                    if (result?.Message?.Value == null) continue;
 
-                    if (result?.Message?.Value == null)
-                        continue;
-
-                    var message = JsonSerializer.Deserialize<T>(result.Message.Value)!;
-
+                    var message = JsonSerializer.Deserialize<T>(result.Message.Value, _jsonOptions)!;
                     yield return (message, consumer, result);
-
-                    await Task.Yield();
                 }
             }
             finally
@@ -96,15 +76,9 @@ namespace NotificationsService.Clients
             }
         }
 
-        // MANUAL COMMIT
         public void Commit(IConsumer<string, string> consumer, ConsumeResult<string, string> result)
-        {
-            consumer.Commit(result);
-        }
+            => consumer.Commit(result);
 
-        public void Dispose()
-        {
-            _producer?.Dispose();
-        }
+        public void Dispose() => _producer?.Dispose();
     }
 }

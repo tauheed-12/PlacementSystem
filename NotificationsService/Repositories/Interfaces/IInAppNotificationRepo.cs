@@ -1,4 +1,4 @@
-﻿using NotificationsService.Entites;
+﻿using NotificationsService.Entities;
 
 namespace NotificationsService.Repositories.Interfaces
 {

@@ -18,7 +18,7 @@ namespace AuthService.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // ─── User ────────────────────────────────────────────────────────────
+            // ─── User ─────────────────────────
             modelBuilder.Entity<User>(entity =>
             {
                 entity.HasKey(u => u.Id);
@@ -27,33 +27,29 @@ namespace AuthService.Data
                     .IsRequired()
                     .HasMaxLength(256);
 
-                entity.HasIndex(u => u.Email)
-                    .IsUnique();
+                entity.HasIndex(u => u.Email).IsUnique();
 
                 entity.Property(u => u.PasswordHash)
                     .IsRequired()
                     .HasMaxLength(64)
-                    .HasColumnType("varbinary(64)");
+                    .HasColumnType("bytea");
 
                 entity.Property(u => u.PasswordSalt)
                     .IsRequired()
                     .HasMaxLength(64)
-                    .HasColumnType("varbinary(64)");
+                    .HasColumnType("bytea");
 
                 entity.Property(u => u.IsActive)
-                    .IsRequired()
                     .HasDefaultValue(true);
 
                 entity.Property(u => u.IsEmailVerified)
-                    .IsRequired()
                     .HasDefaultValue(false);
 
                 entity.Property(u => u.CreatedAt)
-                    .IsRequired()
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql("NOW()");
             });
 
-            // ─── Role ────────────────────────────────────────────────────────────
+            // ─── Role ─────────────────────────
             modelBuilder.Entity<Role>(entity =>
             {
                 entity.HasKey(r => r.Id);
@@ -62,8 +58,7 @@ namespace AuthService.Data
                     .IsRequired()
                     .HasMaxLength(100);
 
-                entity.HasIndex(r => r.Name)
-                    .IsUnique();
+                entity.HasIndex(r => r.Name).IsUnique();
 
                 entity.HasData(
                     new Role { Id = 1, Name = "Student" },
@@ -74,7 +69,7 @@ namespace AuthService.Data
                 );
             });
 
-            // ─── UserRole (junction) ─────────────────────────────────────────────
+            // ─── UserRole ─────────────────────
             modelBuilder.Entity<UserRole>(entity =>
             {
                 entity.HasKey(ur => new { ur.UserId, ur.RoleId });
@@ -87,44 +82,37 @@ namespace AuthService.Data
                 entity.HasOne(ur => ur.Role)
                     .WithMany(r => r.UserRoles)
                     .HasForeignKey(ur => ur.RoleId)
-                    .OnDelete(DeleteBehavior.Restrict); // never cascade-delete roles
+                    .OnDelete(DeleteBehavior.Restrict);
             });
 
-            // ─── RefreshToken ────────────────────────────────────────────────────
+            // ─── RefreshToken ─────────────────
             modelBuilder.Entity<RefreshToken>(entity =>
             {
                 entity.HasKey(rt => rt.Id);
 
-                // TokenHash, not raw token — sized for SHA-256 hex string (64 chars)
                 entity.Property(rt => rt.TokenHash)
                     .IsRequired()
-                    .HasMaxLength(128);   // headroom for SHA-512 hex if you switch later
+                    .HasMaxLength(128);
 
-                entity.HasIndex(rt => rt.TokenHash)
-                    .IsUnique();          // fast lookup, collision-safe
+                entity.HasIndex(rt => rt.TokenHash).IsUnique();
 
-                entity.Property(rt => rt.ExpiresAt)
-                    .IsRequired();
+                entity.Property(rt => rt.ExpiresAt).IsRequired();
 
                 entity.Property(rt => rt.IsRevoked)
-                    .IsRequired()
                     .HasDefaultValue(false);
 
                 entity.Property(rt => rt.CreatedAt)
-                    .IsRequired()
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql("NOW()");
 
-                entity.Property(rt => rt.RevokedAt)
-                    .IsRequired(false);
+                entity.Property(rt => rt.RevokedAt);
 
                 entity.ToTable(t => t.HasCheckConstraint(
                     "CK_RefreshToken_ExpiresAt",
-                    "[ExpiresAt] > [CreatedAt]"));
+                    "\"ExpiresAt\" > \"CreatedAt\""));
 
-                // RevokedAt only makes sense when IsRevoked = true
                 entity.ToTable(t => t.HasCheckConstraint(
                     "CK_RefreshToken_RevokedAt",
-                    "[IsRevoked] = 0 OR [RevokedAt] IS NOT NULL"));
+                    "\"IsRevoked\" = false OR \"RevokedAt\" IS NOT NULL"));
 
                 entity.HasOne(rt => rt.User)
                     .WithMany(u => u.RefreshTokens)
@@ -132,7 +120,7 @@ namespace AuthService.Data
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // ─── UserToken ───────────────────────────────────────────────────────
+            // ─── UserToken ────────────────────
             modelBuilder.Entity<UserToken>(entity =>
             {
                 entity.HasKey(ut => ut.Id);
@@ -141,25 +129,20 @@ namespace AuthService.Data
                     .IsRequired()
                     .HasMaxLength(512);
 
-                entity.HasIndex(ut => ut.Token)
-                    .IsUnique();
+                entity.HasIndex(ut => ut.Token).IsUnique();
 
-                // Store enum as string so DB is readable without the code
                 entity.Property(ut => ut.TokenType)
-                    .IsRequired()
                     .HasConversion<string>()
                     .HasMaxLength(50);
 
-                entity.Property(ut => ut.ExpiresAt)
-                    .IsRequired();
+                entity.Property(ut => ut.ExpiresAt).IsRequired();
 
                 entity.Property(ut => ut.IsUsed)
-                    .IsRequired()
                     .HasDefaultValue(false);
 
                 entity.ToTable(t => t.HasCheckConstraint(
                     "CK_UserToken_ExpiresAt",
-                    "[ExpiresAt] > GETUTCDATE()"));
+                    "\"ExpiresAt\" > NOW()"));
 
                 entity.HasOne(ut => ut.User)
                     .WithMany(u => u.UserTokens)
@@ -167,7 +150,7 @@ namespace AuthService.Data
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
-            // ─── OutboxMessage ───────────────────────────────────────────────────
+            // ─── OutboxMessage ────────────────
             modelBuilder.Entity<OutboxMessage>(entity =>
             {
                 entity.HasKey(om => om.Id);
@@ -176,32 +159,25 @@ namespace AuthService.Data
                     .IsRequired()
                     .HasMaxLength(100);
 
-                // Kafka partition key — keep it bounded
                 entity.Property(om => om.Key)
                     .IsRequired()
                     .HasMaxLength(256);
 
                 entity.Property(om => om.Payload)
-                    .IsRequired()
-                    .HasColumnType("nvarchar(max)");  // JSON payload, unbounded
+                    .HasColumnType("text");
 
                 entity.Property(om => om.IsProcessed)
-                    .IsRequired()
                     .HasDefaultValue(false);
 
                 entity.Property(om => om.CreatedAt)
-                    .IsRequired()
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql("NOW()");
 
-                entity.Property(om => om.ProcessedAt)
-                    .IsRequired(false);
+                entity.Property(om => om.ProcessedAt);
 
-                // ProcessedAt must be set when IsProcessed = true
                 entity.ToTable(t => t.HasCheckConstraint(
                     "CK_OutboxMessage_ProcessedAt",
-                    "[IsProcessed] = 0 OR [ProcessedAt] IS NOT NULL"));
+                    "\"IsProcessed\" = false OR \"ProcessedAt\" IS NOT NULL"));
 
-                // Outbox poller query: WHERE IsProcessed = 0 ORDER BY CreatedAt
                 entity.HasIndex(om => new { om.IsProcessed, om.CreatedAt });
             });
         }

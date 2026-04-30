@@ -1,5 +1,4 @@
 ﻿using NotificationsService.Data;
-using NotificationsService.Entites;
 using NotificationsService.Entities;
 using NotificationsService.Repositories.Interfaces;
 
@@ -17,7 +16,6 @@ public class NotificationIntentRepo : INotificationIntentRepo
     public async Task AddAsync(NotificationIntent intent)
     {
         await _context.NotificationIntents.AddAsync(intent);
-        await _context.SaveChangesAsync();
         _logger.LogInformation("Notification Intent Created {intentId}", intent.IntentId);
     }
 
@@ -32,7 +30,6 @@ public class NotificationIntentRepo : INotificationIntentRepo
         }
 
         _context.NotificationIntents.Remove(existing);
-        await _context.SaveChangesAsync();
         _logger.LogInformation("Notification Intent Deleted {intentId}", intentId);
     }
 
@@ -54,6 +51,10 @@ public class NotificationIntentRepo : INotificationIntentRepo
             ProcessedAt = DateTime.UtcNow
         };
         await _context.ProcessEvents.AddAsync(processEvent);
+    }
+
+    public async Task SaveChangesAsync()
+    {
         await _context.SaveChangesAsync();
     }
 }

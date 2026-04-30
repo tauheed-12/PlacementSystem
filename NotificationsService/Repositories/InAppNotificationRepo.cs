@@ -1,7 +1,7 @@
 ﻿using Common.Contracts.Web;
 using Microsoft.EntityFrameworkCore;
 using NotificationsService.Data;
-using NotificationsService.Entites;
+using NotificationsService.Entities;
 using NotificationsService.Repositories.Interfaces;
 
 namespace NotificationsService.Repositories

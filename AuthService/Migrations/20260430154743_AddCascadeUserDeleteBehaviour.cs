@@ -5,7 +5,7 @@
 namespace AuthService.Migrations
 {
     /// <inheritdoc />
-    public partial class UpdateDatabase : Migration
+    public partial class AddCascadeUserDeleteBehaviour : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

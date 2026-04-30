@@ -1,7 +1,7 @@
 ﻿using NotificationsService.Clients.Interfaces;
 using NotificationsService.Constants;
-using NotificationsService.Entities;
 using NotificationsService.Enums;
+using NotificationsService.Events;
 using NotificationsService.Repositories.Interfaces;
 
 namespace NotificationsService.Consumers
@@ -10,75 +10,56 @@ namespace NotificationsService.Consumers
     {
         private readonly IKafkaClient _kafkaClient;
         private readonly ILogger<EmailDeliveryWorker> _logger;
-        private readonly IEmailClient _emailClient;
-        private readonly INotificationDeliveryRepo _deliveryRepo;
-        private readonly IStudentServiceClient _studentServiceClient;
+        private readonly IServiceScopeFactory _scopeFactory;
 
-        public EmailDeliveryWorker(
-            IKafkaClient kafkaClient,
-            ILogger<EmailDeliveryWorker> logger,
-            IEmailClient emailClient,
-            INotificationDeliveryRepo deliveryRepo,
-            IStudentServiceClient studentServiceClient)
+        public EmailDeliveryWorker(ILogger<EmailDeliveryWorker> logger, IServiceScopeFactory scopeFactory, IKafkaClient kafkaClient)
         {
-            _kafkaClient = kafkaClient;
             _logger = logger;
-            _emailClient = emailClient;
-            _deliveryRepo = deliveryRepo;
-            _studentServiceClient = studentServiceClient;
+            _scopeFactory = scopeFactory;
+            _kafkaClient = kafkaClient;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await foreach (var (delivery, consumer, result) in 
-                _kafkaClient.Consume<NotificationDelivery>("notifications.delivery.email", stoppingToken))
+            await foreach (var (delivery, consumer, result) in
+                _kafkaClient.Consume<EmailDeliveryEvent>("notifications.delivery.email", "email-delivery-worker", stoppingToken))
             {
+                using var scope = _scopeFactory.CreateScope();
+                var repo = scope.ServiceProvider.GetRequiredService<INotificationDeliveryRepo>();
+                var emailClient = scope.ServiceProvider.GetRequiredService<IEmailClient>();
+
                 try
                 {
-                    var isDelivered = await _deliveryRepo.CheckStatus(delivery.IntentId, NotificationChannel.Email);
-
+                    var isDelivered = await repo.CheckStatus(delivery.IntentId, NotificationChannel.Email);
                     if (isDelivered)
-                        continue;
-
-                    var studentEmail  = await _studentServiceClient.GetEmailByUserId(delivery.UserId);
-                    if (studentEmail == null)
                     {
-                        _logger.LogWarning(
-                            "No email found for user {UserId} in delivery {DeliveryId}", 
-                            delivery.UserId, delivery.Id);
+                        _kafkaClient.Commit(consumer, result);
                         continue;
                     }
 
-                    await _emailClient.SendAsync(studentEmail, delivery.Title, delivery.Body);
+                    if (delivery.Email == null)
+                    {
+                        _logger.LogWarning("No email for user {UserId} in delivery {DeliveryId}", delivery.UserId, delivery.DeliveryId);
+                        _kafkaClient.Commit(consumer, result);
+                        continue;
+                    }
 
-                    await _deliveryRepo.UpdateStatus(
-                        delivery.IntentId, 
-                        NotificationChannel.Email, 
-                        DeliveryStatus.Delivered);
-
+                    await emailClient.SendAsync(delivery.Email, delivery.Title, delivery.Body);
+                    await repo.UpdateStatus(delivery.IntentId, NotificationChannel.Email, DeliveryStatus.Delivered);
                     _kafkaClient.Commit(consumer, result);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing email for delivery {DeliveryId}", delivery.Id);
+                    _logger.LogError(ex, "Error processing email for delivery {DeliveryId}", delivery.DeliveryId);
 
-                    var retryCount = await _deliveryRepo.GetRetryCount(delivery.IntentId, NotificationChannel.Email);
+                    var retryCount = await repo.GetRetryCount(delivery.IntentId, NotificationChannel.Email);
 
                     if (retryCount < RetryCount.MaxRetryCount)
-                    {
-                        await _deliveryRepo.UpdateRetryCount(
-                            delivery.IntentId, 
-                            NotificationChannel.Email, 
-                            retryCount + 1);
-                    }
+                        await repo.UpdateRetryCount(delivery.IntentId, NotificationChannel.Email, retryCount + 1);
                     else
                     {
-                        await _deliveryRepo.UpdateStatus(
-                            delivery.IntentId, 
-                            NotificationChannel.Email,
-                            DeliveryStatus.Failed );
-
-                        await _kafkaClient.Publish( "notifications.delivery.email.dlq", delivery.Id.ToString(), delivery);
+                        await repo.UpdateStatus(delivery.IntentId, NotificationChannel.Email, DeliveryStatus.Failed);
+                        await _kafkaClient.Publish("notifications.delivery.email.dlq", delivery.DeliveryId.ToString(), delivery);
                     }
                 }
             }

@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using NotificationsService.Data;
-using NotificationsService.Entites;
+using NotificationsService.Entities;
 using NotificationsService.Repositories.Interfaces;
 
 namespace NotificationsService.Repositories
@@ -37,10 +37,9 @@ namespace NotificationsService.Repositories
                 _logger.LogInformation("Updating user notification preferences for user {UserId}", preference.UserId);
                 _notificationDbContext.UserNotificationPreferences.Update(preference);
             }
-            await _notificationDbContext.SaveChangesAsync();
         }
 
-        public async Task<IEnumerable<UserNotificationPreferences>> GetAllAsync()
+        public async Task<List<UserNotificationPreferences>> GetAllAsync()
         {
             return await _notificationDbContext.UserNotificationPreferences.ToListAsync();
         }
@@ -56,6 +55,16 @@ namespace NotificationsService.Repositories
             return await _notificationDbContext.UserNotificationPreferences
                 .Where(p => userIds.Contains(p.UserId))
                 .ToListAsync();
+        }
+
+        public async Task<bool> ExistsAsync(Guid userId)
+        {
+            return await _notificationDbContext.UserNotificationPreferences.AnyAsync(p => p.UserId == userId);
+        }
+
+        public async Task SaveChangesAsync(CancellationToken ct = default)
+        {
+            await _notificationDbContext.SaveChangesAsync(ct);
         }
     }
 }

@@ -77,16 +77,8 @@ builder.Services.AddSwaggerGen(options =>
 // -------------------------------------------------------
 // Database
 // -------------------------------------------------------
-builder.Services.AddDbContext<NotificationDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("NotificationDb"),
-        sqlOptions => sqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 5,
-            maxRetryDelay: TimeSpan.FromSeconds(10),
-            errorNumbersToAdd: null
-        )
-    )
-);
+builder.Services.AddDbContext<NotificationDbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
+
 
 // -------------------------------------------------------
 // Background Service Clients

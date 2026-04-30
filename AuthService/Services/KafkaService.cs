@@ -1,6 +1,8 @@
 ﻿using AuthService.Services.Interfaces;
 using Confluent.Kafka;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Runtime.CompilerServices;
 
 namespace AuthService.Services
 {
@@ -8,19 +10,31 @@ namespace AuthService.Services
     {
         private readonly IProducer<string, string> _producer;
         private readonly ConsumerConfig _consumerConfig;
+        private readonly ILogger<KafkaService> _logger;
 
-        public KafkaService()
+        private static readonly JsonSerializerOptions _jsonOptions = new()
         {
+            Converters = { new JsonStringEnumConverter() },
+            PropertyNameCaseInsensitive = true
+        };
+
+        public KafkaService(ILogger<KafkaService> logger, IConfiguration config)
+        {
+            _logger = logger;
+
+            var bootstrapServers = config["Kafka:BootstrapServers"]
+                ?? throw new InvalidOperationException("Kafka:BootstrapServers is not configured.");
+
             var producerConfig = new ProducerConfig
             {
-                BootstrapServers = "localhost:9092",
+                BootstrapServers = bootstrapServers,
                 Acks = Acks.All
             };
 
             _consumerConfig = new ConsumerConfig
             {
-                BootstrapServers = "localhost:9092",
-                GroupId = "notification-service",
+                BootstrapServers = bootstrapServers,
+                GroupId = "auth-service",
                 AutoOffsetReset = AutoOffsetReset.Earliest,
                 EnableAutoCommit = false
             };
@@ -28,38 +42,49 @@ namespace AuthService.Services
             _producer = new ProducerBuilder<string, string>(producerConfig).Build();
         }
 
-        // PRODUCE MESSAGE
         public async Task Publish<T>(string topic, string key, T message)
         {
-            var payload = JsonSerializer.Serialize(message);
+            var payload = JsonSerializer.Serialize(message, _jsonOptions);
+            _logger.LogInformation("Publishing to {Topic} key={Key}: {Payload}", topic, key, payload);
 
-            await _producer.ProduceAsync(
-                topic,
-                new Message<string, string>
-                {
-                    Key = key,
-                    Value = payload
-                });
+            await _producer.ProduceAsync(topic, new Message<string, string>
+            {
+                Key = key,
+                Value = payload
+            });
+
+            _logger.LogInformation("Published to {Topic} key={Key}", topic, key);
         }
 
-        // CONSUME MESSAGE
-        public async IAsyncEnumerable<(T Message, IConsumer<string, string> Consumer, ConsumeResult<string, string> Result)>
-        Consume<T>(
-            string topic,
-            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken token)
+        public async Task PublishRaw(string topic, string key, string payload)
         {
-            var consumer = new ConsumerBuilder<string, string>(_consumerConfig).Build();
+            _logger.LogInformation("Publishing raw to {Topic} key={Key}: {Payload}", topic, key, payload);
+
+            await _producer.ProduceAsync(topic, new Message<string, string>
+            {
+                Key = key,
+                Value = payload
+            });
+
+            _logger.LogInformation("Published raw to {Topic} key={Key}", topic, key);
+        }
+
+        public async IAsyncEnumerable<(T Message, IConsumer<string, string> Consumer, ConsumeResult<string, string> Result)>
+        Consume<T>(string topic, [EnumeratorCancellation] CancellationToken token)
+        {
+            var consumerConfig = new ConsumerConfig(_consumerConfig);
+            var consumer = new ConsumerBuilder<string, string>(consumerConfig).Build();
             consumer.Subscribe(topic);
 
             try
             {
                 while (!token.IsCancellationRequested)
                 {
-                    ConsumeResult<string, string>? result;
+                    ConsumeResult<string, string>? result = null;
 
                     try
                     {
-                        result = consumer.Consume(token);
+                        result = await Task.Run(() => consumer.Consume(token), token);
                     }
                     catch (OperationCanceledException)
                     {
@@ -69,11 +94,9 @@ namespace AuthService.Services
                     if (result?.Message?.Value == null)
                         continue;
 
-                    var message = JsonSerializer.Deserialize<T>(result.Message.Value)!;
+                    var message = JsonSerializer.Deserialize<T>(result.Message.Value, _jsonOptions)!;
 
                     yield return (message, consumer, result);
-
-                    await Task.Yield();
                 }
             }
             finally
@@ -83,7 +106,6 @@ namespace AuthService.Services
             }
         }
 
-        // MANUAL COMMIT
         public void Commit(IConsumer<string, string> consumer, ConsumeResult<string, string> result)
         {
             consumer.Commit(result);

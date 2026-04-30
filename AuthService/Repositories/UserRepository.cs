@@ -106,7 +106,6 @@ namespace AuthService.Repositories
                 .Where(msg => !msg.IsProcessed)
                 .OrderBy(msg => msg.CreatedAt)
                 .Take(batchSize)
-                .AsNoTracking()
                 .ToListAsync(ct);
         }
 

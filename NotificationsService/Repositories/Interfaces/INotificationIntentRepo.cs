@@ -9,5 +9,6 @@ namespace NotificationsService.Repositories.Interfaces
         public Task<bool> IntentExists(Guid intentId);
         public Task<bool> IsEventProcessed(Guid eventId);
         public Task MarkEventAsProcessed(Guid eventId);
+        public Task SaveChangesAsync();
     }
 }
