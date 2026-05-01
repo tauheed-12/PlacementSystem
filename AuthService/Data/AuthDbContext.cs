@@ -18,48 +18,23 @@ namespace AuthService.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // ─── User ─────────────────────────
             modelBuilder.Entity<User>(entity =>
             {
                 entity.HasKey(u => u.Id);
-
-                entity.Property(u => u.Email)
-                    .IsRequired()
-                    .HasMaxLength(256);
-
+                entity.Property(u => u.Email).IsRequired().HasMaxLength(256);
                 entity.HasIndex(u => u.Email).IsUnique();
-
-                entity.Property(u => u.PasswordHash)
-                    .IsRequired()
-                    .HasMaxLength(64)
-                    .HasColumnType("bytea");
-
-                entity.Property(u => u.PasswordSalt)
-                    .IsRequired()
-                    .HasMaxLength(64)
-                    .HasColumnType("bytea");
-
-                entity.Property(u => u.IsActive)
-                    .HasDefaultValue(true);
-
-                entity.Property(u => u.IsEmailVerified)
-                    .HasDefaultValue(false);
-
-                entity.Property(u => u.CreatedAt)
-                    .HasDefaultValueSql("NOW()");
+                entity.Property(u => u.PasswordHash).IsRequired().HasMaxLength(64).HasColumnType("bytea");
+                entity.Property(u => u.PasswordSalt).IsRequired().HasMaxLength(64).HasColumnType("bytea");
+                entity.Property(u => u.IsActive).HasDefaultValue(true);
+                entity.Property(u => u.IsEmailVerified).HasDefaultValue(false);
+                entity.Property(u => u.CreatedAt).HasDefaultValueSql("NOW()");
             });
 
-            // ─── Role ─────────────────────────
             modelBuilder.Entity<Role>(entity =>
             {
                 entity.HasKey(r => r.Id);
-
-                entity.Property(r => r.Name)
-                    .IsRequired()
-                    .HasMaxLength(100);
-
+                entity.Property(r => r.Name).IsRequired().HasMaxLength(100);
                 entity.HasIndex(r => r.Name).IsUnique();
-
                 entity.HasData(
                     new Role { Id = 1, Name = "Student" },
                     new Role { Id = 2, Name = "PlacementCoordinator" },
@@ -69,115 +44,43 @@ namespace AuthService.Data
                 );
             });
 
-            // ─── UserRole ─────────────────────
             modelBuilder.Entity<UserRole>(entity =>
             {
                 entity.HasKey(ur => new { ur.UserId, ur.RoleId });
-
-                entity.HasOne(ur => ur.User)
-                    .WithMany(u => u.UserRoles)
-                    .HasForeignKey(ur => ur.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
-
-                entity.HasOne(ur => ur.Role)
-                    .WithMany(r => r.UserRoles)
-                    .HasForeignKey(ur => ur.RoleId)
-                    .OnDelete(DeleteBehavior.Restrict);
+                entity.HasOne(ur => ur.User).WithMany(u => u.UserRoles).HasForeignKey(ur => ur.UserId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(ur => ur.Role).WithMany(r => r.UserRoles).HasForeignKey(ur => ur.RoleId).OnDelete(DeleteBehavior.Restrict);
             });
 
-            // ─── RefreshToken ─────────────────
             modelBuilder.Entity<RefreshToken>(entity =>
             {
                 entity.HasKey(rt => rt.Id);
-
-                entity.Property(rt => rt.TokenHash)
-                    .IsRequired()
-                    .HasMaxLength(128);
-
+                entity.Property(rt => rt.TokenHash).IsRequired().HasMaxLength(128);
                 entity.HasIndex(rt => rt.TokenHash).IsUnique();
-
                 entity.Property(rt => rt.ExpiresAt).IsRequired();
-
-                entity.Property(rt => rt.IsRevoked)
-                    .HasDefaultValue(false);
-
-                entity.Property(rt => rt.CreatedAt)
-                    .HasDefaultValueSql("NOW()");
-
-                entity.Property(rt => rt.RevokedAt);
-
-                entity.ToTable(t => t.HasCheckConstraint(
-                    "CK_RefreshToken_ExpiresAt",
-                    "\"ExpiresAt\" > \"CreatedAt\""));
-
-                entity.ToTable(t => t.HasCheckConstraint(
-                    "CK_RefreshToken_RevokedAt",
-                    "\"IsRevoked\" = false OR \"RevokedAt\" IS NOT NULL"));
-
-                entity.HasOne(rt => rt.User)
-                    .WithMany(u => u.RefreshTokens)
-                    .HasForeignKey(rt => rt.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                entity.Property(rt => rt.IsRevoked).HasDefaultValue(false);
+                entity.Property(rt => rt.CreatedAt).HasDefaultValueSql("NOW()");
+                entity.HasOne(rt => rt.User).WithMany(u => u.RefreshTokens).HasForeignKey(rt => rt.UserId).OnDelete(DeleteBehavior.Cascade);
             });
 
-            // ─── UserToken ────────────────────
             modelBuilder.Entity<UserToken>(entity =>
             {
                 entity.HasKey(ut => ut.Id);
-
-                entity.Property(ut => ut.Token)
-                    .IsRequired()
-                    .HasMaxLength(512);
-
+                entity.Property(ut => ut.Token).IsRequired().HasMaxLength(512);
                 entity.HasIndex(ut => ut.Token).IsUnique();
-
-                entity.Property(ut => ut.TokenType)
-                    .HasConversion<string>()
-                    .HasMaxLength(50);
-
+                entity.Property(ut => ut.TokenType).HasConversion<string>().HasMaxLength(50);
                 entity.Property(ut => ut.ExpiresAt).IsRequired();
-
-                entity.Property(ut => ut.IsUsed)
-                    .HasDefaultValue(false);
-
-                entity.ToTable(t => t.HasCheckConstraint(
-                    "CK_UserToken_ExpiresAt",
-                    "\"ExpiresAt\" > NOW()"));
-
-                entity.HasOne(ut => ut.User)
-                    .WithMany(u => u.UserTokens)
-                    .HasForeignKey(ut => ut.UserId)
-                    .OnDelete(DeleteBehavior.Cascade);
+                entity.Property(ut => ut.IsUsed).HasDefaultValue(false);
+                entity.HasOne(ut => ut.User).WithMany(u => u.UserTokens).HasForeignKey(ut => ut.UserId).OnDelete(DeleteBehavior.Cascade);
             });
 
-            // ─── OutboxMessage ────────────────
             modelBuilder.Entity<OutboxMessage>(entity =>
             {
                 entity.HasKey(om => om.Id);
-
-                entity.Property(om => om.EventType)
-                    .IsRequired()
-                    .HasMaxLength(100);
-
-                entity.Property(om => om.Key)
-                    .IsRequired()
-                    .HasMaxLength(256);
-
-                entity.Property(om => om.Payload)
-                    .HasColumnType("text");
-
-                entity.Property(om => om.IsProcessed)
-                    .HasDefaultValue(false);
-
-                entity.Property(om => om.CreatedAt)
-                    .HasDefaultValueSql("NOW()");
-
-                entity.Property(om => om.ProcessedAt);
-
-                entity.ToTable(t => t.HasCheckConstraint(
-                    "CK_OutboxMessage_ProcessedAt",
-                    "\"IsProcessed\" = false OR \"ProcessedAt\" IS NOT NULL"));
-
+                entity.Property(om => om.EventType).IsRequired().HasMaxLength(100);
+                entity.Property(om => om.Key).IsRequired().HasMaxLength(256);
+                entity.Property(om => om.Payload).HasColumnType("text");
+                entity.Property(om => om.IsProcessed).HasDefaultValue(false);
+                entity.Property(om => om.CreatedAt).HasDefaultValueSql("NOW()");
                 entity.HasIndex(om => new { om.IsProcessed, om.CreatedAt });
             });
         }

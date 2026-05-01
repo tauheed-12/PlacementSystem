@@ -37,7 +37,7 @@ namespace PlacementDriveService.Services
                     }
                 }
 
-                await repo.SaveChangesAsync();
+                await repo.SaveChangesAsync(cancellationToken);
 
                 await Task.Delay(5000, cancellationToken);
             }

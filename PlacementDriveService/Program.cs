@@ -7,139 +7,78 @@ using PlacementDriveService.Repositries.Interfaces;
 using Common.Contracts.Infrastructure;
 using PlacementDriveService.Services;
 using PlacementDriveService.Services.Interfaces;
+using FluentValidation;
+using PlacementDriveService.Validators;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ----------------------------------------------------
-// Configuration
-// ----------------------------------------------------
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false)
     .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-// ----------------------------------------------------
-// Logging
-// ----------------------------------------------------
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Logging.AddDebug();
 
-// ----------------------------------------------------
-// Database Configuration
-// ----------------------------------------------------
 builder.Services.AddDbContext<PlacementDriveDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("PlacementDriveDb"),
-        sqlOptions =>
-        {
-            sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(10),
-                errorNumbersToAdd: null
-            );
-        })
-);
+    options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
-// ----------------------------------------------------
-// Controllers
-// ----------------------------------------------------
 builder.Services.AddControllers();
 
-// ----------------------------------------------------
-// HTTP Context Accessor
-// Needed to read X-User-Id and X-User-Role headers
-// forwarded by the API Gateway
-// ----------------------------------------------------
+builder.Services.AddValidatorsFromAssemblyContaining<DriveCreateRequestValidator>();
+builder.Services.AddValidatorsFromAssemblyContaining<DriveUpdateRequestValidator>();
+
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<RequestContextAccessor>();
 
-// ----------------------------------------------------
-// Application Services & Repositories
-// ----------------------------------------------------
 builder.Services.AddSingleton<IKafkaClient, KafkaClient>();
-
 builder.Services.AddScoped<IPlacementDriveService, PlacementDriveService.Services.PlacementDriveService>();
 builder.Services.AddScoped<IPlacementDriveRepository, PlacementDriveRepository>();
 
-// ----------------------------------------------------
-// Health Checks
-// ----------------------------------------------------
+builder.Services.AddHostedService<OutboxProcessor>();
+
+builder.Services.AddAuthorization();
+
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<PlacementDriveDbContext>("database");
 
-// ----------------------------------------------------
-// Swagger
-// ----------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddSwaggerGen(options =>
 {
-    options.SwaggerDoc("v1", new OpenApiInfo
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Drive Service API", Version = "v1" });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Title = "PlacementDrive API",
-        Version = "v1"
-    });
-
-    // Simulates gateway header forwarding during local dev testing
-    options.AddSecurityDefinition("GatewayHeaders", new OpenApiSecurityScheme
-    {
-        Name = "X-User-Id",
-        Type = SecuritySchemeType.ApiKey,
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Paste a user GUID to simulate gateway forwarding"
+        Description = "Enter your JWT token."
     });
-
-    options.AddSecurityDefinition("X-User-Role", new OpenApiSecurityScheme
-    {
-        Name = "X-User-Role",
-        Type = SecuritySchemeType.ApiKey,
-        In = ParameterLocation.Header,
-        Description = "User Role (e.g. admin, student)"
-    });
-
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
             new OpenApiSecurityScheme
             {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "X-User-Id"
-                }
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" }
             },
-            new string[] {}
-        },
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "X-User-Role"
-                }
-            },
-            new string[] {}
+            Array.Empty<string>()
         }
     });
 });
 
-// ----------------------------------------------------
-// Build Application
-// ----------------------------------------------------
 var app = builder.Build();
 
-// ----------------------------------------------------
-// Middleware Pipeline
-// ----------------------------------------------------
 if (app.Environment.IsDevelopment())
 {
+    app.UseMiddleware<LocalGatewaySimulationMiddleware>();
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
+app.UseAuthorization();
 app.UseGlobalExceptionMiddleware();
 
 app.MapControllers();

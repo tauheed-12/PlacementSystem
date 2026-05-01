@@ -17,17 +17,11 @@ namespace NotificationsService.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // ─── NotificationIntent ─────────────────────────
             modelBuilder.Entity<NotificationIntent>(entity =>
             {
                 entity.HasKey(ni => ni.IntentId);
-
-                entity.Property(ni => ni.EventType)
-                    .IsRequired()
-                    .HasMaxLength(100);
-
-                entity.Property(ni => ni.CreatedAt)
-                    .HasDefaultValueSql("NOW()");
+                entity.Property(ni => ni.EventType).IsRequired().HasMaxLength(100);
+                entity.Property(ni => ni.CreatedAt).HasDefaultValueSql("NOW()");
             });
         }
     }

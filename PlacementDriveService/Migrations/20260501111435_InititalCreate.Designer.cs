@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PlacementDriveService.Data;
@@ -11,9 +12,11 @@ using PlacementDriveService.Data;
 namespace PlacementDriveService.Migrations
 {
     [DbContext(typeof(PlacementDriveDbContext))]
-    partial class PlacementDriveDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260501111435_InititalCreate")]
+    partial class InititalCreate
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
