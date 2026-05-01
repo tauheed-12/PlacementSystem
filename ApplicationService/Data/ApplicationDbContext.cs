@@ -16,24 +16,11 @@ namespace ApplicationService.Data
             modelBuilder.Entity<Entities.Application>(b =>
             {
                 b.HasKey(a => a.Id);
-
-                b.Property(a => a.StudentUserId)
-                    .IsRequired();
-
-                b.Property(a => a.DriveId)
-                    .IsRequired();
-
-                b.Property(a => a.Status)
-                    .IsRequired()
-                    .HasMaxLength(50);
-
-                b.Property(a => a.AppliedAt)
-                    .IsRequired()
-                    .HasDefaultValueSql("GETUTCDATE()");
-
-                b.HasIndex(a => new { a.StudentUserId, a.DriveId })
-                    .IsUnique();
-
+                b.Property(a => a.StudentUserId).IsRequired();
+                b.Property(a => a.DriveId).IsRequired();
+                b.Property(a => a.Status).IsRequired().HasConversion<string>().HasMaxLength(50);
+                b.Property(a => a.AppliedAt).IsRequired().HasDefaultValueSql("NOW()");
+                b.HasIndex(a => new { a.StudentUserId, a.DriveId }).IsUnique();
                 b.HasIndex(a => a.StudentUserId);
                 b.HasIndex(a => a.DriveId);
             });

@@ -1,5 +1,5 @@
 ﻿using ApplicationService.Enums;
-using ApplicationService.Middleware;
+using Common.Contracts.Web;
 
 namespace ApplicationService.Entities
 {

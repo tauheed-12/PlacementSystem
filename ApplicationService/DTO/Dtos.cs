@@ -21,13 +21,13 @@ namespace ApplicationService.DTO
             Guid DriveId,
             Guid StudentId,
             DateTime AppliedAt,
-            string Status
+            ApplicationStatus Status
         );
 
         public record UserApplicationSummary(
             Guid ApplicationId,
             string CompanyName,
-            string Status,
+            ApplicationStatus Status,
             DateTime AppliedAt,
             DateTime DriveDate
         );
@@ -48,7 +48,7 @@ namespace ApplicationService.DTO
             Guid Id,
             Guid DriveId,
             DateTime AppliedAt,
-            string Status
+            ApplicationStatus Status
         );
 
         public record ApiResponse<T>(bool Success, string? Message, T? Data);
