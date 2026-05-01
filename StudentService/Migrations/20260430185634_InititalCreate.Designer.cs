@@ -2,9 +2,9 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using StudentService.Data;
 
 #nullable disable
@@ -12,65 +12,98 @@ using StudentService.Data;
 namespace StudentService.Migrations
 {
     [DbContext(typeof(StudentDbContext))]
-    [Migration("20260110112739_UpdatingDbSchema")]
-    partial class UpdatingDbSchema
+    [Migration("20260430185634_InititalCreate")]
+    partial class InititalCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.0-preview.1.23111.4")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+                .HasAnnotation("ProductVersion", "8.0.4")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("StudentService.Entities.Student", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Batch")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Branch")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<decimal>("CGPA")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("numeric(4,2)");
 
                     b.Property<string>("Course")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
 
                     b.Property<string>("EnrollmentNo")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("FullName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsPlaced")
-                        .HasColumnType("bit");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)");
+
+                    b.Property<decimal>("ProfileProgress")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("numeric(5,2)")
+                        .HasDefaultValue(0m);
 
                     b.Property<string>("RollNo")
                         .IsRequired()
-                        .HasColumnType("nvarchar(450)");
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("Semester")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0);
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<int>("Year")
-                        .HasColumnType("int");
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .IsUnique();
 
                     b.HasIndex("EnrollmentNo")
                         .IsUnique();
@@ -81,32 +114,46 @@ namespace StudentService.Migrations
                     b.HasIndex("UserId")
                         .IsUnique();
 
-                    b.ToTable("Students");
+                    b.ToTable("Students", t =>
+                        {
+                            t.HasCheckConstraint("CK_Student_CGPA", "\"CGPA\" >= 0.00 AND \"CGPA\" <= 10.00");
+
+                            t.HasCheckConstraint("CK_Student_ProfileProgress", "\"ProfileProgress\" >= 0.00 AND \"ProfileProgress\" <= 100.00");
+
+                            t.HasCheckConstraint("CK_Student_Semester", "\"Semester\" >= 0 AND \"Semester\" <= 12");
+
+                            t.HasCheckConstraint("CK_Student_Year", "\"Year\" >= 1 AND \"Year\" <= 5");
+                        });
                 });
 
             modelBuilder.Entity("StudentService.Entities.StudentDocument", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("DocumentType")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("DocumentUrl")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
 
                     b.Property<Guid>("StudentId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("UploadedAt")
-                        .HasColumnType("datetime2");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StudentId");
+                    b.HasIndex("StudentId", "DocumentType")
+                        .IsUnique();
 
                     b.ToTable("StudentDocuments");
                 });
@@ -115,18 +162,20 @@ namespace StudentService.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.Property<string>("SkillName")
                         .IsRequired()
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
 
                     b.Property<Guid>("StudentId")
-                        .HasColumnType("uniqueidentifier");
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("StudentId");
+                    b.HasIndex("StudentId", "SkillName")
+                        .IsUnique();
 
                     b.ToTable("StudentSkills");
                 });

@@ -11,6 +11,7 @@ namespace StudentService.Data
         public DbSet<StudentDocument> StudentDocuments { get; set; }
         public DbSet<StudentSkill> StudentSkills { get; set; }
 
+        [Obsolete]
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -71,24 +72,27 @@ namespace StudentService.Data
                     .IsRequired()
                     .HasDefaultValue(0);
 
-                entity.ToTable(t => t.HasCheckConstraint(
+                entity.HasCheckConstraint(
                     "CK_Student_Semester",
-                    "[Semester] >= 0 AND [Semester] <= 12"));
+                    "\"Semester\" >= 0 AND \"Semester\" <= 12"
+                );
 
                 entity.Property(s => s.Year)
                     .IsRequired();
 
-                entity.ToTable(t => t.HasCheckConstraint(
+                entity.HasCheckConstraint(
                     "CK_Student_Year",
-                    "[Year] >= 1 AND [Year] <= 5"));
+                    "\"Year\" >= 1 AND \"Year\" <= 5"
+                );
 
                 entity.Property(s => s.CGPA)
                     .IsRequired()
-                    .HasColumnType("decimal(4,2)");
+                    .HasColumnType("numeric(4,2)");
 
-                entity.ToTable(t => t.HasCheckConstraint(
+                entity.HasCheckConstraint(
                     "CK_Student_CGPA",
-                    "[CGPA] >= 0.00 AND [CGPA] <= 10.00"));
+                    "\"CGPA\" >= 0.00 AND \"CGPA\" <= 10.00"
+                );
 
                 entity.Property(s => s.IsPlaced)
                     .IsRequired()
@@ -96,16 +100,17 @@ namespace StudentService.Data
 
                 entity.Property(s => s.ProfileProgress)
                     .IsRequired()
-                    .HasColumnType("decimal(5,2)")
+                    .HasColumnType("numeric(5,2)")
                     .HasDefaultValue(0);
 
-                entity.ToTable(t => t.HasCheckConstraint(
+                entity.HasCheckConstraint(
                     "CK_Student_ProfileProgress",
-                    "[ProfileProgress] >= 0.00 AND [ProfileProgress] <= 100.00"));
+                    "\"ProfileProgress\" >= 0.00 AND \"ProfileProgress\" <= 100.00"
+                );
 
                 entity.Property(s => s.CreatedAt)
                     .IsRequired()
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql("NOW()");
             });
 
             // ─── StudentSkill ────────────────────────────────────────────────────
@@ -118,7 +123,7 @@ namespace StudentService.Data
                     .HasMaxLength(100);
 
                 entity.HasIndex(ss => new { ss.StudentId, ss.SkillName })
-                    .IsUnique(); // no duplicate skills per student
+                    .IsUnique();
 
                 entity.HasOne(ss => ss.Student)
                     .WithMany(s => s.Skills)
@@ -141,10 +146,10 @@ namespace StudentService.Data
 
                 entity.Property(sd => sd.UploadedAt)
                     .IsRequired()
-                    .HasDefaultValueSql("GETUTCDATE()");
+                    .HasDefaultValueSql("NOW()");
 
                 entity.HasIndex(sd => new { sd.StudentId, sd.DocumentType })
-                    .IsUnique(); // one document per type per student
+                    .IsUnique();
 
                 entity.HasOne(sd => sd.Student)
                     .WithMany(s => s.Documents)

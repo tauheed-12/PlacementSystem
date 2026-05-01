@@ -4,7 +4,7 @@ namespace StudentService.Services.Interfaces
 {
     public interface IStudentService
     {
-        Task CreateProfileAsync(Guid userId, Dtos.CreateStudentProfileRequest request, CancellationToken cancellationToken);
+        Task CreateProfileAsync(Guid userId, string Email, Dtos.CreateStudentProfileRequest request, CancellationToken cancellationToken);
         Task<Dtos.StudentProfileResponse> GetProfileAsync(Guid userId, CancellationToken cancellationToken);
         Task UpdateProfileAsync(Guid userId, Dtos.UpdateStudentProfileRequest dto, CancellationToken cancellationToken);
         Task DeleteProfileAsync(Guid userId, CancellationToken cancellationToken);

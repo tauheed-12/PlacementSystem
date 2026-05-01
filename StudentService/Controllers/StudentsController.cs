@@ -14,11 +14,13 @@ namespace StudentService.Controllers
     {
         private readonly IStudentService _service;
         private readonly RequestContextAccessor _contextAccessor;
+        private readonly ILogger<StudentsController> _logger;
 
-        public StudentsController(IStudentService service, RequestContextAccessor contextAccessor)
+        public StudentsController(IStudentService service, RequestContextAccessor contextAccessor, ILogger<StudentsController> logger)
         {
             _service = service;
             _contextAccessor = contextAccessor;
+            _logger = logger;
         }
 
 
@@ -43,7 +45,7 @@ namespace StudentService.Controllers
             var context = _contextAccessor.GetContext();
             if (!context.IsInRole(Roles.Student)) return Forbid();
 
-            await _service.CreateProfileAsync(context.UserId, dto, ct);
+            await _service.CreateProfileAsync(context.UserId, context.EmailId, dto, ct);
             return Created(string.Empty, ApiEnvelope<object>.Ok("Profile created successfully"));
         }
 
@@ -52,6 +54,7 @@ namespace StudentService.Controllers
         public async Task<IActionResult> Get(CancellationToken ct)
         {
             var context = _contextAccessor.GetContext();
+            _logger.LogInformation("User {UserId} with roles {Roles} is attempting to access their profile", context.UserId, string.Join(",", context.Roles));
             if (!context.IsInRole(Roles.Student)) return Forbid();
 
             var result = await _service.GetProfileAsync(context.UserId, ct);

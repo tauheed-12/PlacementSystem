@@ -1,5 +1,5 @@
-using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Microsoft.EntityFrameworkCore;
 using StudentService.Data;
 using StudentService.Repositories;
 using StudentService.Repositories.Interfaces;
@@ -20,21 +20,10 @@ builder.Configuration
     .AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
-// ----------------------------------------------------
+// -----------------------------------------------------
 // Database Configuration
-// ----------------------------------------------------
-builder.Services.AddDbContext<StudentDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("StudentDb"),
-        sqlOptions =>
-        {
-            sqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(10),
-                errorNumbersToAdd: null
-            );
-        })
-);
+// -----------------------------------------------------
+builder.Services.AddDbContext<StudentDbContext>(options => options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 // ----------------------------------------------------
 // Controllers
@@ -71,22 +60,23 @@ builder.Services.AddHealthChecks()
 // Swagger
 // ----------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "StudentService API",
+        Title = "Student Service API",
         Version = "v1"
     });
 
-    // Simulates gateway header forwarding during local dev testing
-    options.AddSecurityDefinition("GatewayHeaders", new OpenApiSecurityScheme
+    // JWT Bearer Auth definition
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Name = "X-User-Id",
-        Type = SecuritySchemeType.ApiKey,
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
         In = ParameterLocation.Header,
-        Description = "Paste a user GUID to simulate gateway forwarding"
+        Description = "Enter your JWT token. Example: eyJhbGci..."
     });
 
     options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -96,8 +86,8 @@ builder.Services.AddSwaggerGen(options =>
             {
                 Reference = new OpenApiReference
                 {
-                    Id = "GatewayHeaders",
-                    Type = ReferenceType.SecurityScheme
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
                 }
             },
             Array.Empty<string>()
@@ -115,6 +105,7 @@ var app = builder.Build();
 // ----------------------------------------------------
 if (app.Environment.IsDevelopment())
 {
+    app.UseMiddleware<LocalGatewaySimulationMiddleware>();
     app.UseSwagger();
     app.UseSwaggerUI();
 }

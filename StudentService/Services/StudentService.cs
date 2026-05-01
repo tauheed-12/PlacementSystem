@@ -17,7 +17,7 @@ namespace StudentService.Services
             _logger = logger;
         }
 
-        public async Task CreateProfileAsync(Guid userId, CreateStudentProfileRequest request, CancellationToken cancellationToken)
+        public async Task CreateProfileAsync(Guid userId, string Email, CreateStudentProfileRequest request, CancellationToken cancellationToken)
         {
             if (await _repo.ExistsByUserIdAsync(userId, cancellationToken))
                 throw new ConflictException("Profile already exists for this user.");
@@ -26,12 +26,14 @@ namespace StudentService.Services
             {
                 Id = Guid.NewGuid(),
                 UserId = userId,
+                Email = Email,
                 RollNo = request.RollNo,
                 EnrollmentNo = request.EnrollmentNo,
                 FullName = request.FullName,
                 PhoneNumber = request.PhoneNumber,
                 Course = request.Course,
                 Branch = request.Branch,
+                Batch = request.Batch,
                 Year = request.Year,
                 CGPA = request.CGPA,
                 Skills = request.Skills?.Select(skill => new StudentSkill
